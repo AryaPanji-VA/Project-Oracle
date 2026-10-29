@@ -167,4 +167,164 @@ Deliverables:
 
 - Lab dapat dijalankan dan dipulihkan secara terkontrol.
 - Pengujian awal menggunakan target lokal atau sistem yang memiliki izin.
-- B
+- Batas jaringan dan dampak setiap eksperimen dipahami.
+- Eksperimen tidak bergantung pada akses ke sistem utama.
+
+### Phase 4 — ORACLE Tooling
+
+**Status:** Planned
+
+**Goal:** Mengembangkan utilitas dan command-line tools sendiri untuk membantu pengelolaan dan pembelajaran sistem.
+
+Tasks:
+
+- [ ] Mengidentifikasi kebutuhan tooling yang benar-benar muncul selama pengembangan.
+- [ ] Menentukan fungsi dan antarmuka CLI awal.
+- [ ] Membuat tool pertama dengan ruang lingkup kecil.
+- [ ] Menambahkan validasi input dan penanganan error.
+- [ ] Membuat pengujian dan dokumentasi penggunaan.
+- [ ] Mengintegrasikan tool ke image hanya setelah pengujian berhasil.
+
+Contoh kemungkinan tooling:
+
+- Pemeriksaan informasi sistem.
+- Pemeriksaan status konfigurasi ORACLE OS.
+- Pembantu proses build dan validasi image.
+- Pemeriksaan kesehatan sistem.
+- Pengelolaan catatan eksperimen lab.
+
+Deliverables:
+
+- Satu atau lebih CLI tools yang berfungsi.
+- Dokumentasi perintah dan contoh penggunaan.
+- Pengujian untuk fungsi utama.
+
+**Acceptance criteria:**
+
+- Setiap tool memiliki tujuan yang jelas.
+- Perilaku dan output dapat diverifikasi.
+- Error ditangani dengan baik.
+- Tool tidak melakukan perubahan destruktif secara diam-diam.
+
+### Phase 5 — Reliability & Release
+
+**Status:** Planned
+
+**Goal:** Membuat proses build dan pengujian ORACLE OS lebih konsisten, terdokumentasi, dan mudah direproduksi.
+
+Tasks:
+
+- [ ] Mengulang proses build dari kondisi yang terdokumentasi.
+- [ ] Menetapkan checklist pengujian untuk setiap image.
+- [ ] Menguji boot, konfigurasi, dan fungsi inti.
+- [ ] Mendokumentasikan known issues.
+- [ ] Menetapkan versi dan catatan perubahan.
+- [ ] Menyimpan checksum untuk artefak rilis.
+- [ ] Menetapkan prosedur backup dan pemulihan proyek.
+
+Deliverables:
+
+- Checklist pengujian.
+- Build instructions yang diperbarui.
+- Release notes.
+- Informasi versi dan checksum image.
+- Dokumentasi known issues.
+
+**Acceptance criteria:**
+
+- Image dapat dibangun ulang mengikuti instruksi proyek.
+- Pengujian inti memiliki hasil yang tercatat.
+- Masalah yang diketahui tidak disembunyikan.
+- Setiap artefak rilis memiliki versi yang dapat diidentifikasi.
+
+### Phase 6 — Kernel Research
+
+**Status:** Long-Term Research
+
+**Goal:** Mempelajari arsitektur kernel secara mendalam dan memulai eksperimen kernel sebagai proyek terpisah.
+
+Tasks:
+
+- [ ] Mempelajari proses boot Linux.
+- [ ] Memahami system calls dan interaksi user space dengan kernel.
+- [ ] Mempelajari manajemen memori.
+- [ ] Mempelajari proses, thread, dan scheduling.
+- [ ] Mempelajari interrupt dan driver.
+- [ ] Membangun lingkungan eksperimen kernel yang terpisah.
+- [ ] Menjalankan eksperimen menggunakan QEMU.
+- [ ] Mendokumentasikan perbedaan antara kernel Linux yang digunakan dan kernel eksperimental.
+
+Deliverables:
+
+- Catatan riset kernel.
+- Program eksperimen kecil.
+- Lingkungan pengujian kernel.
+- Dokumentasi hasil dan keterbatasan eksperimen.
+
+**Acceptance criteria:**
+
+- Konsep yang dipelajari dibuktikan melalui eksperimen.
+- Kernel eksperimental tidak menggantikan kernel sistem utama.
+- Pengujian dapat dilakukan di lingkungan virtual yang terisolasi.
+- Hasil eksperimen dan keterbatasannya terdokumentasi.
+
+**Catatan:** Kernel Research bukan prasyarat untuk membuat image awal ORACLE OS. Tahap ini dimulai setelah fondasi distribusi cukup stabil dan pemahaman dasar sistem sudah berkembang.
+
+---
+
+## 4. Milestone Overview
+
+| Milestone | Hasil yang diharapkan |
+|---|---|
+| M0 — Foundation | Struktur proyek dan spesifikasi terdokumentasi |
+| M1 — First Boot | Image ORACLE OS berhasil di-boot di QEMU |
+| M2 — Core System | Identitas dan konfigurasi sistem terstruktur |
+| M3 — Security Lab | Lingkungan cybersecurity terisolasi berfungsi |
+| M4 — ORACLE Tooling | Tooling CLI awal berfungsi dan teruji |
+| M5 — Reliable Build | Build dan pengujian dapat diulang |
+| M6 — Kernel Research | Eksperimen kernel terpisah berjalan di lingkungan virtual |
+
+Milestone diselesaikan berdasarkan acceptance criteria, bukan hanya karena semua task sudah dicentang.
+
+---
+
+## 5. Development Workflow
+
+Untuk setiap perubahan:
+
+1. Tentukan satu tujuan kecil.
+2. Pelajari tool dan konsep yang diperlukan.
+3. Implementasikan perubahan.
+4. Jalankan pengujian yang relevan.
+5. Catat hasil dan masalah yang ditemukan.
+6. Simpan perubahan menggunakan Git setelah hasilnya diperiksa.
+
+Hindari mengerjakan beberapa fitur besar secara bersamaan sebelum fondasi yang diperlukan selesai.
+
+---
+
+## 6. Safety Boundaries
+
+- Pengembangan awal berfokus pada build dan pengujian di lingkungan virtual.
+- Jangan menulis image ke SSD internal atau USB fisik tanpa persetujuan eksplisit dan verifikasi target perangkat.
+- Jangan mengubah partisi, EFI, bootloader, konfigurasi Omarchy, atau Windows sebagai bagian dari workflow default.
+- Jangan menjalankan perintah destruktif tanpa menjelaskan dampak dan mendapatkan persetujuan.
+- Gunakan snapshot atau salinan VM sebelum eksperimen yang berisiko.
+- Pengujian keamanan dibatasi pada sistem milik sendiri atau sistem yang memiliki izin eksplisit.
+- Jika suatu langkah berpotensi mengganggu sistem utama, hentikan dan evaluasi alternatif yang lebih aman.
+
+---
+
+## 7. Current Focus
+
+**Prioritas saat ini: menyelesaikan Foundation dan mempersiapkan First Boot.**
+
+Langkah berikutnya:
+
+1. Memeriksa isi repository dan dokumen yang sudah tersedia.
+2. Melengkapi spesifikasi proyek dan keputusan arsitektur.
+3. Memahami kebutuhan build Archiso.
+4. Menyiapkan workflow build yang terisolasi.
+5. Menghasilkan dan menguji image minimal di QEMU.
+
+**Prinsip utama:** ORACLE OS tidak perlu langsung menjadi distribusi yang lengkap. Target awalnya adalah image minimal yang benar-benar bisa dibangun, di-boot, diuji, dan dipahami proses kerjanya.
