@@ -1,0 +1,86 @@
+# ============================================================================
+# ORACLE OS — .gitignore
+#
+# Tujuan: artefak build TIDAK boleh masuk Git.
+# Image Debian Live + folder kerja `live-build` bisa berukuran puluhan GB;
+# sekali ter-commit, repo membengkak permanen dan push ke GitHub ditolak.
+#
+# Aturan: yang di-commit hanya sumber (config, dokumentasi, skrip, definisi
+# paket & profile). Semua hasil build diabaikan.
+# ============================================================================
+
+# ---- Hasil build image -----------------------------------------------------
+/out/
+/build/
+*.iso
+*.img
+*.iso.sha256
+*.iso.sig
+*.iso.zsync
+*.torrent
+
+# ---- Folder kerja live-build ----------------------------------------------
+# Muncul kalau `lb build` dijalankan. Kalau build dijalankan dari root proyek,
+# folder bernama `config/`, `binary/`, `chroot/`, `cache/`, `local/`, `.build/`
+# akan dibuat di sini. `config/` milik proyek TIDAK diabaikan — karena itu
+# build sebaiknya dijalankan di workspace terpisah (mis. build/), bukan di root.
+/binary/
+/chroot/
+/cache/
+/local/
+/.build/
+/.stage/
+/build.log
+binary.log
+chroot.log
+*.build.log
+*.bootstrap.log
+
+# ---- Media virtual / pengujian -------------------------------------------
+*.qcow2
+*.vdi
+*.vmdk
+*.vhd
+/out/*.qcow2
+*.pid
+*.monitor
+
+# ---- Cache paket & tool ---------------------------------------------------
+apt-cache/
+*.deb
+!dists/**/*.deb
+debian-live/
+
+# ---- Rahasia / kredensial -------------------------------------------------
+# Jangan pernah commit kunci signing paket, token, atau kredensial.
+*.key
+*.gpg
+*.asc
+!docs/**/*.asc
+.env
+.env.*
+*.secret
+secrets/
+
+# ---- Editor & OS ----------------------------------------------------------
+*.swp
+*.swo
+*~
+.*.swp
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- Python ---------------------------------------------------------------
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# ---- Catatan lokal --------------------------------------------------------
+notes.local.md
+*.local.conf

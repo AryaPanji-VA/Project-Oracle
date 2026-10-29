@@ -2,8 +2,8 @@
 
 > **Status:** Early Development  
 > **Versi roadmap:** 0.1.0  
-> **Base distribution:** Arch Linux  
-> **Build system:** Archiso  
+> **Base distribution:** Debian  
+> **Build system:** Debian Live (`live-build`)  
 > **Testing environment:** QEMU virtual machine  
 > **Project focus:** Linux systems learning and isolated cybersecurity lab
 
@@ -11,7 +11,7 @@
 
 ORACLE OS adalah distribusi Linux eksperimental yang dikembangkan untuk mempelajari cara kerja sistem operasi Linux, membangun lingkungan cybersecurity yang terisolasi, dan mengembangkan tooling sistem sendiri.
 
-Pengembangan dimulai dengan menggunakan kernel Linux yang sudah tersedia dan membangun distribusi berbasis Arch Linux. Pengembangan kernel sendiri merupakan tujuan jangka panjang yang akan dikerjakan sebagai proyek riset terpisah.
+Pengembangan dimulai dengan menggunakan kernel Linux yang sudah tersedia dan membangun distribusi berbasis Debian. Pengembangan kernel sendiri merupakan tujuan jangka panjang yang akan dikerjakan sebagai proyek riset terpisah.
 
 ### Project Goals
 
@@ -57,8 +57,8 @@ Tasks:
 - [x] Membuat repository Git untuk ORACLE OS.
 - [x] Membuat README awal.
 - [x] Membuat struktur direktori awal.
+- [x] Mendokumentasikan arsitektur dan keputusan teknis.
 - [ ] Menetapkan spesifikasi proyek secara tertulis.
-- [ ] Mendokumentasikan arsitektur dan keputusan teknis.
 - [ ] Menetapkan workflow development dan testing.
 - [ ] Memverifikasi konfigurasi proyek dan struktur repository.
 
@@ -69,6 +69,7 @@ Deliverables:
 - `config/oracle.conf`
 - `docs/ARCHITECTURE.md`
 - `docs/DEVELOPMENT.md`
+- `.gitignore`
 
 **Acceptance criteria:**
 
@@ -81,13 +82,13 @@ Deliverables:
 
 **Status:** Planned
 
-**Goal:** Menghasilkan image Linux minimal berbasis Arch Linux menggunakan Archiso dan membuktikan bahwa image tersebut dapat di-boot.
+**Goal:** Menghasilkan image Linux minimal berbasis Debian menggunakan `live-build` (Debian Live) dan membuktikan bahwa image tersebut dapat di-boot.
 
 Tasks:
 
-- [ ] Memahami cara kerja Archiso.
+- [ ] Memahami cara kerja Debian Live dan `live-build`.
 - [ ] Menentukan lingkungan build yang aman dan terpisah.
-- [ ] Menyiapkan profil image minimal ORACLE OS.
+- [ ] Menyiapkan konfigurasi image minimal ORACLE OS.
 - [ ] Menentukan paket awal yang benar-benar diperlukan.
 - [ ] Menjalankan proses build image.
 - [ ] Memverifikasi file image dan hasil build.
@@ -96,7 +97,7 @@ Tasks:
 
 Deliverables:
 
-- Profil build ORACLE OS.
+- Konfigurasi build ORACLE OS.
 - Image ISO hasil build.
 - Catatan proses build.
 - Dokumentasi hasil pengujian QEMU.
@@ -323,7 +324,7 @@ Langkah berikutnya:
 
 1. Memeriksa isi repository dan dokumen yang sudah tersedia.
 2. Melengkapi spesifikasi proyek dan keputusan arsitektur.
-3. Memahami kebutuhan build Archiso.
+3. Memahami kebutuhan build Debian Live (`live-build`).
 4. Menyiapkan workflow build yang terisolasi.
 5. Menghasilkan dan menguji image minimal di QEMU.
 
