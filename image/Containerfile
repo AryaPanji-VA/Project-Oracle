@@ -1,0 +1,52 @@
+# ============================================================================
+# image/Containerfile — lingkungan build ORACLE OS
+#
+# Kenapa container? Host ini Arch (Omarchy) dan `live-build` itu paket Debian
+# yang tidak ada di repo Arch maupun AUR. Daripada memasang tool Debian di host
+# Arch, kita build di dalam container Debian supaya:
+#   1. host tidak tersentuh,
+#   2. tool yang dipakai = tool Debian asli,
+#   3. hasilnya bisa diulang siapa pun yang punya podman.
+#
+# Dibangun sekali dengan:
+#   podman build -t oracle-builder:13 -f image/Containerfile image/
+# ============================================================================
+
+FROM debian:13
+
+LABEL org.opencontainers.image.title="ORACLE OS build environment" \
+      org.opencontainers.image.description="Debian live-build toolchain for building ORACLE OS images" \
+      org.opencontainers.image.version="0.1.0"
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Toolchain build image live Debian + verifikasi hasilnya.
+#   live-build      : pembuat image (lb config / lb build)
+#   debootstrap     : memasang sistem Debian minimal ke chroot  (dependensi live-build)
+#   xorriso         : merakit ISO                             (dependensi live-build)
+#   mksquashfs      : squashfs-tools, kompresi root filesystem (dependensi live-build)
+#   mtools/dosfstools: membuat bootloader EFI FAT             (dependensi live-build)
+#   ca-certificates : verifikasi mirror HTTPS
+#   file, rsync     : pemeriksaan artefak & staging
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        live-build \
+        debootstrap \
+        xorriso \
+        squashfs-tools \
+        mtools \
+        dosfstools \
+        ca-certificates \
+        file \
+        rsync \
+        fdisk \
+    && rm -rf /var/lib/apt/lists/*
+
+# Repo proyek di-mount di /work saat build, bukan di-COPY.
+# Lokasi ini dipakai scripts/build.sh lewat -e ORACLE_ROOT=/work.
+WORKDIR /work
+
+# Sanity check saat image builder dibangun: jangan sampai toolchain "ada"
+# tapi tidak bisa dipanggil.
+RUN lb --version && debootstrap --version
+
+CMD ["/bin/bash"]

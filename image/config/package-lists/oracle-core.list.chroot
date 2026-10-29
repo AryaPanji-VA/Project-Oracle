@@ -1,0 +1,39 @@
+# ============================================================================
+# image/config/package-lists/oracle-core.list.chroot
+#
+# Paket inti ORACLE OS — sengaja MINIMAL.
+#
+# Aturan yang dipakai saat menambah paket di sini:
+#   1. Satu paket = satu alasan yang bisa ditulis di komentar.
+#   2. Kalau paket itu cuma "enak ada", jangan masukkan sekarang.
+#      Tambahkan setelah image pertama berhasil boot.
+#   3. Paket keamanan khusus masuk ke profile, BUKAN di sini.
+#
+# Format: satu nama paket per baris. Komentar diawali '#'.
+# Daftar ini belum final (ARCHITECTURE section 5.1: package list = TBD).
+# ============================================================================
+
+# --- Inti Debian Live -------------------------------------------------------
+# live-boot & live-config: tanpa ini image tidak bisa jalan sebagai live system.
+live-boot
+live-config
+live-config-systemd
+
+# --- Boot & init ------------------------------------------------------------
+systemd
+systemd-sysv
+
+# --- Kernel -----------------------------------------------------------------
+# Kernel standar Debian (amd64). Bukan kernel kustom — sesuai non-goal proyek.
+linux-image-amd64
+
+# --- Administrasi dasar -----------------------------------------------------
+# sudo: akses admin terkontrol (ARCHITECTURE 6: unprivileged account + sudo).
+sudo
+# Sistem berkas & partisi.
+e2fsprogs
+dosfstools
+# Shell & utilitas dasar.
+bash
+nano
+less

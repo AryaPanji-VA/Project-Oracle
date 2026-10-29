@@ -132,6 +132,28 @@ ORACLE OS will use a staged hybrid build system.
 
 Use Debian `live-build` to construct the first images. Maintain the build configuration, package selections, and customization scripts in the project repository.
 
+### Build environment
+
+Builds run inside a **rootless Podman container based on Debian 13 (trixie)**, not on the host system.
+
+Reason: the host is an Arch-based Omarchy system, where `live-build` is not distributed through the official repositories. Running the build in a Debian container also keeps the host untouched and matches the Debian environment the image is built from.
+
+`podman` is used instead of `docker` because it runs rootless by default, so the build does not require membership of a privileged container group.
+
+The host must not be modified by the build. Any tooling change belongs inside the container image definition, not on the host.
+
+### Build workspace
+
+`live-build` writes its working directories (`config/`, `binary/`, `chroot/`, `cache/`) into the directory where it is invoked. Running it at the repository root would collide with the project's own `config/` directory.
+
+The repository therefore separates sources from build output:
+
+- `image/` holds the version-controlled build sources (package lists, hooks, `auto/` configuration, includes).
+- `build/` is a throwaway, git-ignored workspace where `live-build` actually runs.
+- `scripts/build.sh` stages `image/` into `build/` before invoking `lb build`.
+
+`build/` and all generated images are excluded from Git by `.gitignore`.
+
 ### Later stage
 
 Introduce an ORACLE CLI wrapper to simplify common build operations, profile selection, and validation.
@@ -231,7 +253,6 @@ The detailed roadmap and priorities will be maintained separately in `docs/ROADM
 
 The following details remain intentionally unresolved until implementation requires them:
 
-- Exact Debian release and image configuration.
 - Core package list.
 - Tool profile names, packages, and dependencies.
 - Desktop environment and display manager.
@@ -243,6 +264,11 @@ The following details remain intentionally unresolved until implementation requi
 - Detailed release and acceptance criteria.
 
 These items should be resolved incrementally and documented when decisions are made.
+
+### Decided
+
+- **Debian release:** Debian **13 (trixie)** is the target base for v0.1. Debian 13 became the current stable release on 9 August 2025; version 13.7 was published on 12 September 2026. Debian 12 (bookworm) is now *oldstable* and is not used. The release is pinned in `config/oracle.conf` as `DEBIAN_RELEASE="13"` / `DEBIAN_CODENAME="trixie"`.
+- **Build environment:** rootless Podman container running Debian 13 (see section 8).
 
 ## 15. Architecture Summary
 

@@ -23,6 +23,32 @@
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — keputusan teknis: base system, build system, tooling, dan batas keamanan.
 - `config/oracle.conf` — identitas proyek (nama, ID, versi, base distribution, purpose).
 
+## Struktur Repository
+
+```
+Oracle-OS/
+├── image/          # sumber build live-build (di-commit)
+│   ├── auto/config #   konfigurasi `lb config`
+│   ├── config/     #   package-lists & hooks
+│   └── Containerfile
+├── config/         # identitas proyek: oracle.conf
+├── docs/           # ROADMAP.md, ARCHITECTURE.md
+├── scripts/        # build.sh
+└── build/          # workspace build — DIABAIKAN Git, dibuat ulang tiap build
+```
+
+## Build
+
+Butuh `podman`. Build berjalan di dalam container Debian 13, **bukan di host**:
+
+```bash
+sudo pacman -S podman     # sekali saja
+./scripts/build.sh --check   # cek prasyarat tanpa build
+./scripts/build.sh           # build image ISO
+```
+
+Hasil build muncul di `build/` dan tidak pernah masuk Git.
+
 ## Catatan
 
 ORACLE dimulai sebagai distribusi Linux berbasis kernel yang sudah ada. Pengembangan kernel sendiri merupakan tujuan jangka panjang yang terpisah.

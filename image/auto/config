@@ -1,0 +1,28 @@
+#!/bin/sh
+# ============================================================================
+# image/auto/config — konfigurasi `lb config` untuk ORACLE OS
+#
+# File ini dijalankan OTOMATIS oleh `lb config`. Isinya hanya flag.
+# Semua nilai yang berhubungan dengan identitas proyek dibaca dari
+# config/oracle.conf supaya tidak ada dua sumber kebenaran.
+# ============================================================================
+
+set -eu
+
+# Baca identitas proyek dari satu tempat saja.
+. "${ORACLE_ROOT}/config/oracle.conf"
+
+lb config \
+	--distribution "${DEBIAN_CODENAME}" \
+	--architecture amd64 \
+	--binary-images iso-hybrid \
+	--mode debian \
+	--system live \
+	--bootappend-live "boot=live components hostname=${ID} username=user" \
+	--archive-areas "main contrib non-free-firmware" \
+	--apt-indices false \
+	--apt-recommends false \
+	--memtest none \
+	--iso-application "${NAME}" \
+	--iso-publisher "${NAME} ${VERSION}" \
+	--iso-volume "${ID^^}"

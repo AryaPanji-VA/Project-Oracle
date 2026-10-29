@@ -1,0 +1,56 @@
+#!/bin/sh
+# ============================================================================
+# image/config/hooks/live/0100-oracle-identity.hook.chroot
+#
+# Hook ini dijalankan DI DALAM chroot image saat build — bukan di host.
+# Tujuannya: menanamkan identitas ORACLE OS ke dalam image.
+#
+# Kenapa identitas di sini dan bukan di package-lists? Karena hostname dan
+# file identitas bukan paket; mereka hasil menulis file ke dalam image.
+#
+# Hook harus:
+#   - idempotent (aman dijalankan ulang saat rebuild),
+#   - tidak bergantung pada jaringan,
+#   - gagal keras (exit non-zero) kalau ada yang salah, supaya build berhenti
+#     dan tidak menghasilkan image "setengah jadi" yang terlihat sukses.
+# ============================================================================
+
+set -eu
+
+# Identitas dibaca dari sumber tunggal di image, bukan diketik ulang di sini.
+IDENTITY_SRC="${ORACLE_ROOT}/config/oracle.conf"
+IDENTITY_DST="/etc/oracle/oracle.conf"
+
+install -d -m 0755 /etc/oracle
+install -m 0644 "${IDENTITY_SRC}" "${IDENTITY_DST}"
+
+# Ambil nilai dari file identitas tadi.
+# shellcheck disable=SC1090
+. "${IDENTITY_DST}"
+
+# --- Hostname ---------------------------------------------------------------
+printf '%s\n' "${ID}" > /etc/hostname
+
+# Baris hosts untuk hostname lokal harus diganti, bukan ditambah.
+# Kalau hanya di-append, menjalankan hook dua kali menghasilkan entri duplikat.
+# /etc/hosts tidak punya hostname sendiri (isi standarnya cuma 'localhost'),
+# jadi penggantian ini tidak menghapus entri penting.
+if grep -qE '^127\.0\.1\.1[[:space:]]' /etc/hosts 2>/dev/null; then
+	sed -i -E "s|^127\.0\.1\.1[[:space:]].*|127.0.1.1\t${ID}|" /etc/hosts
+else
+	printf '127.0.1.1\t%s\n' "${ID}" >> /etc/hosts
+fi
+
+# --- Identitas distribusi (dibaca oleh /etc/os-release) ---------------------
+if [ -f /etc/os-release ]; then
+	sed -i "s|^PRETTY_NAME=.*|PRETTY_NAME=\"${NAME} ${VERSION}\"|" /etc/os-release
+	sed -i "s|^NAME=.*|NAME=\"${NAME}\"|" /etc/os-release
+	sed -i "s|^ID=.*|ID=\"${ID}\"|" /etc/os-release
+	sed -i "s|^VERSION=.*|VERSION=\"${VERSION}\"|" /etc/os-release
+	sed -i "s|^VERSION_ID=.*|VERSION_ID=\"${VERSION}\"|" /etc/os-release
+fi
+
+# Penanda build, berguna saat verifikasi di QEMU nanti.
+printf '%s %s (%s)\n' "${NAME}" "${VERSION}" "${BASE}" > /etc/oracle-release
+
+echo "[oracle] identity written: ${NAME} ${VERSION} / hostname=${ID}"
