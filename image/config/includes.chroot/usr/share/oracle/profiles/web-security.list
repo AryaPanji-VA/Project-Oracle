@@ -1,0 +1,7 @@
+# Profile: web-security — pengujian keamanan aplikasi web
+# Hanya untuk sistem milik sendiri atau yang punya izin tertulis.
+nikto
+sqlmap
+dirb
+gobuster
+whatweb

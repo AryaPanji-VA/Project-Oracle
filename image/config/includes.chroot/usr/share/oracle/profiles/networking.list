@@ -1,0 +1,12 @@
+# Profile: networking — diagnostik jaringan dasar
+# Dipakai saat build (image/config/package-lists) DAN saat runtime (`oracle profile install`).
+network-manager
+iproute2
+iputils-ping
+traceroute
+dnsutils
+netcat-openbsd
+tcpdump
+nmap
+curl
+wget

@@ -2,39 +2,39 @@
 # ============================================================================
 # image/config/hooks/live/0100-oracle-identity.hook.chroot
 #
-# Hook ini dijalankan DI DALAM chroot image saat build — bukan di host.
-# Tujuannya: menanamkan identitas ORACLE OS ke dalam image.
+# Dijalankan DI DALAM chroot image saat build — bukan di host.
 #
-# Kenapa identitas di sini dan bukan di package-lists? Karena hostname dan
-# file identitas bukan paket; mereka hasil menulis file ke dalam image.
+# Sumber identitas: /etc/oracle/oracle.conf, yang disalin ke dalam image oleh
+# scripts/build.sh. Hook TIDAK boleh bergantung pada variabel lingkungan host
+# (ORACLE_ROOT dkk): chroot tidak mewarisinya, dan `set -eu` akan menghentikan
+# build dengan error yang membingungkan.
 #
-# Hook harus:
-#   - idempotent (aman dijalankan ulang saat rebuild),
-#   - tidak bergantung pada jaringan,
-#   - gagal keras (exit non-zero) kalau ada yang salah, supaya build berhenti
-#     dan tidak menghasilkan image "setengah jadi" yang terlihat sukses.
+# Aturan hook: idempotent, tanpa jaringan, gagal keras kalau ada yang salah.
 # ============================================================================
 
 set -eu
 
-# Identitas dibaca dari sumber tunggal di image, bukan diketik ulang di sini.
-IDENTITY_SRC="${ORACLE_ROOT}/config/oracle.conf"
-IDENTITY_DST="/etc/oracle/oracle.conf"
+IDENTITY_SRC="/etc/oracle/oracle.conf"
 
-install -d -m 0755 /etc/oracle
-install -m 0644 "${IDENTITY_SRC}" "${IDENTITY_DST}"
+if [ ! -f "${IDENTITY_SRC}" ]; then
+	echo "[oracle] FATAL: ${IDENTITY_SRC} tidak ada." >&2
+	echo "[oracle] scripts/build.sh harus menyalinnya ke config/includes.chroot/etc/oracle/." >&2
+	exit 1
+fi
 
-# Ambil nilai dari file identitas tadi.
 # shellcheck disable=SC1090
-. "${IDENTITY_DST}"
+. "${IDENTITY_SRC}"
+
+: "${NAME:?NAME kosong di ${IDENTITY_SRC}}"
+: "${ID:?ID kosong di ${IDENTITY_SRC}}"
+: "${VERSION:?VERSION kosong di ${IDENTITY_SRC}}"
 
 # --- Hostname ---------------------------------------------------------------
 printf '%s\n' "${ID}" > /etc/hostname
 
-# Baris hosts untuk hostname lokal harus diganti, bukan ditambah.
-# Kalau hanya di-append, menjalankan hook dua kali menghasilkan entri duplikat.
-# /etc/hosts tidak punya hostname sendiri (isi standarnya cuma 'localhost'),
-# jadi penggantian ini tidak menghapus entri penting.
+# Ganti baris, jangan append: hook yang jalan dua kali tidak boleh menduplikasi.
+# Isi standar /etc/hosts hanya 'localhost', jadi penggantian ini tidak
+# menghapus entri penting.
 if grep -qE '^127\.0\.1\.1[[:space:]]' /etc/hosts 2>/dev/null; then
 	sed -i -E "s|^127\.0\.1\.1[[:space:]].*|127.0.1.1\t${ID}|" /etc/hosts
 else
@@ -50,7 +50,8 @@ if [ -f /etc/os-release ]; then
 	sed -i "s|^VERSION_ID=.*|VERSION_ID=\"${VERSION}\"|" /etc/os-release
 fi
 
-# Penanda build, berguna saat verifikasi di QEMU nanti.
-printf '%s %s (%s)\n' "${NAME}" "${VERSION}" "${BASE}" > /etc/oracle-release
+# Penanda build, dipakai saat verifikasi di QEMU.
+printf '%s %s (%s %s)\n' "${NAME}" "${VERSION}" "${BASE}" "${DEBIAN_CODENAME}" \
+	> /etc/oracle-release
 
-echo "[oracle] identity written: ${NAME} ${VERSION} / hostname=${ID}"
+echo "[oracle] identity applied: ${NAME} ${VERSION} / hostname=${ID}"

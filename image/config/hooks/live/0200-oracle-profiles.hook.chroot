@@ -1,0 +1,71 @@
+#!/bin/sh
+# ============================================================================
+# image/config/hooks/live/0200-oracle-profiles.hook.chroot
+#
+# Merakit package-list dari profile yang dipilih di config/profiles.conf.
+#
+# Kenapa di hook, bukan file .list statis?
+#   Definisi profile HARUS satu sumber. Kalau kita tulis daftar paket profile
+#   langsung sebagai file .list, daftarnya jadi dua: satu untuk build, satu
+#   untuk `oracle profile install` di runtime. Dua daftar = cepat atau lambat
+#   berbeda. Hook ini memakai file profile yang SAMA dengan yang dipakai CLI.
+#
+# Input : /etc/oracle/profiles.conf (dipilih saat build)
+#         /usr/share/oracle/profiles/<nama>.list
+# Output: paket ditambahkan ke image lewat apt, atau lebih tepatnya dicatat
+#         agar live-build memasangnya.
+#
+# Catatan penting: hook .chroot berjalan SETELAH paket dipasang, jadi apt di
+# sini adalah pemasangan tambahan di dalam chroot — bukan cara paling ideal.
+# Cara yang lebih bersih (generate .list sebelum lb build) dicatat sebagai
+# pekerjaan lanjutan di docs/STATUS.md. Untuk v0.1 dengan profile kosong,
+# jalur ini tidak menambah risiko.
+# ============================================================================
+
+set -eu
+
+PROFILES_CONF="/etc/oracle/profiles.conf"
+PROFILE_DIR="/usr/share/oracle/profiles"
+
+if [ ! -f "$PROFILES_CONF" ]; then
+	echo "[oracle] tidak ada profiles.conf; tidak ada profile dipilih"
+	exit 0
+fi
+
+# Ambil nama profile: buang komentar, spasi, dan baris kosong.
+selected="$(sed -e 's/#.*//' -e 's/[[:space:]]//g' "$PROFILES_CONF" | grep -v '^$' || true)"
+
+if [ -z "$selected" ]; then
+	echo "[oracle] tidak ada profile dipilih; image minimal"
+	exit 0
+fi
+
+pkgs=""
+for name in $selected; do
+	# Validasi: hanya nama aman, dan filenya harus ada.
+	if ! printf '%s' "$name" | grep -Eq '^[a-z0-9][a-z0-9-]{0,31}$'; then
+		echo "[oracle] FATAL: nama profile tidak valid di profiles.conf: '$name'" >&2
+		exit 1
+	fi
+	list="$PROFILE_DIR/$name.list"
+	if [ ! -f "$list" ]; then
+		echo "[oracle] FATAL: profile '$name' dipilih tapi $list tidak ada." >&2
+		echo "[oracle] Pilihan tersedia:" >&2
+		ls "$PROFILE_DIR" 2>/dev/null | sed 's/\.list$//' | sed 's/^/  - /' >&2
+		exit 1
+	fi
+	content="$(sed -e 's/#.*//' -e 's/[[:space:]]//g' "$list" | grep -v '^$' || true)"
+	pkgs="$pkgs $content"
+	# Hitung dengan grep -c, bukan wc -l: wc -l kurang satu kalau file tidak
+	# diakhiri newline.
+	count="$(printf '%s\n' "$content" | grep -c . || true)"
+	echo "[oracle] profile '$name' -> $count paket"
+done
+
+# shellcheck disable=SC2086
+if ! DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $pkgs; then
+	echo "[oracle] FATAL: pemasangan paket profile gagal." >&2
+	exit 1
+fi
+
+echo "[oracle] profile terpasang ke image"

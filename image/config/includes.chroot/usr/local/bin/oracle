@@ -1,0 +1,162 @@
+#!/bin/sh
+# ============================================================================
+# image/config/includes.chroot/usr/local/bin/oracle — CLI ORACLE OS
+#
+# Dua peran, satu file:
+#   - saat build  : dipakai live-build untuk merakit package-list dari profile
+#   - saat runtime: dipakai user di image untuk melihat identitas & memasang profile
+#
+# Prinsip keamanan:
+#   - Nama profile divalidasi terhadap daftar file yang ADA. Input user tidak
+#     pernah dieksekusi sebagai shell command, tidak pernah masuk ke `eval`,
+#     dan tidak pernah digabung ke string perintah.
+#   - Pemasangan runtime wajib lewat sudo, memakai apt-get dengan penanganan
+#     error, dan tidak melanjutkan kalau apt gagal.
+#
+# Sengaja ditulis POSIX sh: image belum tentu punya bash.
+# ============================================================================
+
+set -eu
+
+CONF="${ORACLE_CONF:-/etc/oracle/oracle.conf}"
+PROFILE_DIR="${ORACLE_PROFILE_DIR:-/usr/share/oracle/profiles}"
+# Override di atas ada supaya logika bisa diuji di host tanpa menyentuh /etc
+# dan /usr/share. Di dalam image, keduanya memakai nilai default.
+
+say()  { printf '%s\n' "$*"; }
+err()  { printf 'oracle: %s\n' "$*" >&2; }
+die()  { err "$*"; exit 1; }
+
+usage() {
+	cat <<'EOF'
+ORACLE OS — command line interface
+
+Pemakaian:
+  oracle identity              tampilkan identitas sistem
+  oracle version               tampilkan versi
+  oracle profile list          daftar profile yang tersedia
+  oracle profile check NAME    cek isi profile tanpa memasang
+  oracle profile install NAME  pasang paket profile (butuh administrator)
+
+Profile adalah daftar paket untuk satu tujuan, mis. networking atau
+web-security. Profile yang sama dipakai saat build image dan saat runtime.
+EOF
+}
+
+# ---------------------------------------------------------------------------
+# Identitas
+# ---------------------------------------------------------------------------
+cmd_identity() {
+	[ -f "$CONF" ] || die "$CONF tidak ditemukan; image ini tidak lengkap"
+	# shellcheck disable=SC1090
+	. "$CONF"
+	say "NAME            : ${NAME:-?}"
+	say "ID              : ${ID:-?}"
+	say "VERSION         : ${VERSION:-?}"
+	say "BASE            : ${BASE:-?} ${DEBIAN_RELEASE:-?} (${DEBIAN_CODENAME:-?})"
+	say "PURPOSE         : ${PURPOSE:-?}"
+	say "hostname        : $(cat /etc/hostname 2>/dev/null || echo '?')"
+	say "profile tersedia: $(profile_names | tr '\n' ' ')"
+}
+
+# ---------------------------------------------------------------------------
+# Profile
+#
+# Nama profile divalidasi dengan pola yang ketat, lalu dicocokkan ke file yang
+# benar-benar ada di PROFILE_DIR. Tidak ada jalur di mana input user menjadi
+# bagian dari perintah shell.
+# ---------------------------------------------------------------------------
+profile_names() {
+	[ -d "$PROFILE_DIR" ] || return 0
+	for f in "$PROFILE_DIR"/*.list; do
+		[ -e "$f" ] || continue
+		basename "$f" .list
+	done
+}
+
+valid_name() {
+	printf '%s' "$1" | grep -Eq '^[a-z0-9][a-z0-9-]{0,31}$'
+}
+
+profile_path() {
+	valid_name "$1" || die "nama profile tidak valid: '$1'
+  Hanya huruf kecil, angka, dan tanda hubung. Contoh: networking"
+	printf '%s/%s.list' "$PROFILE_DIR" "$1"
+}
+
+profile_packages() {
+	# Buang komentar dan baris kosong. Output: satu paket per baris.
+	sed -e 's/#.*//' -e 's/[[:space:]]//g' "$1" | grep -v '^$'
+}
+
+cmd_profile_list() {
+	names="$(profile_names)"
+	[ -n "$names" ] || { say "Tidak ada profile terpasang."; return 0; }
+	printf '%-16s %-6s %s\n' "PROFILE" "PAKET" "KETERANGAN"
+	for n in $names; do
+		p="$PROFILE_DIR/$n.list"
+		count="$(profile_packages "$p" | wc -l | tr -d ' ')"
+		desc="$(sed -n 's/^#[[:space:]]*//p' "$p" | head -1)"
+		printf '%-16s %-6s %s\n' "$n" "$count" "$desc"
+	done
+}
+
+cmd_profile_check() {
+	[ $# -eq 1 ] || die "pakai: oracle profile check NAME"
+	p="$(profile_path "$1")"
+	[ -f "$p" ] || die "profile '$1' tidak ada. Lihat: oracle profile list"
+	say "Profile : $1"
+	say "File    : $p"
+	say "Paket   :"
+	profile_packages "$p" | sed 's/^/  - /'
+}
+
+cmd_profile_install() {
+	[ $# -eq 1 ] || die "pakai: oracle profile install NAME"
+
+	if [ "$(id -u)" -ne 0 ]; then
+		die "pemasangan profile butuh administrator.
+  Jalankan: sudo oracle profile install $1"
+	fi
+
+	p="$(profile_path "$1")"
+	[ -f "$p" ] || die "profile '$1' tidak ada. Lihat: oracle profile list"
+
+	# Daftar paket dibaca ke variabel, lalu diteruskan sebagai argumen terpisah.
+	# Tidak ada eval, tidak ada string perintah yang dirakit dari input.
+	pkgs="$(profile_packages "$p")"
+	[ -n "$pkgs" ] || die "profile '$1' tidak berisi paket"
+
+	say "Memasang profile '$1'..."
+	# shellcheck disable=SC2086
+	if ! DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $pkgs; then
+		die "apt-get gagal. Profile '$1' TIDAK terpasang penuh.
+  Periksa output di atas, lalu jalankan ulang."
+	fi
+	say "Profile '$1' terpasang."
+}
+
+# ---------------------------------------------------------------------------
+# Dispatch
+# ---------------------------------------------------------------------------
+[ $# -gt 0 ] || { usage; exit 1; }
+
+cmd="$1"; shift
+
+case "$cmd" in
+	identity) cmd_identity ;;
+	version)  [ -f "$CONF" ] || die "$CONF tidak ditemukan"; . "$CONF"; say "${NAME} ${VERSION}" ;;
+	profile)
+		[ $# -gt 0 ] || die "pakai: oracle profile {list|check|install} [NAME]"
+		sub="$1"; shift
+		case "$sub" in
+			list)    cmd_profile_list ;;
+			check)   cmd_profile_check "$@" ;;
+			install) cmd_profile_install "$@" ;;
+			*)       die "subperintah profile tidak dikenal: $sub (list|check|install)" ;;
+		esac
+		;;
+	help|-h|--help) usage ;;
+	*) die "perintah tidak dikenal: $cmd
+  Coba: oracle help" ;;
+esac
