@@ -2,16 +2,26 @@
 # ============================================================================
 # image/config/includes.chroot/usr/local/bin/oracle — CLI ORACLE OS
 #
-# Dua peran, satu file:
-#   - saat build  : dipakai live-build untuk merakit package-list dari profile
-#   - saat runtime: dipakai user di image untuk melihat identitas & memasang profile
+# ALAT RUNTIME SAJA. Berkas ini dipasang ke image dan dipakai setelah sistem
+# boot, bukan saat build.
+#
+# Pembagian tugas yang jelas:
+#   - build-time  : scripts/gen-profile-list.sh (di host) membaca profile dan
+#                   menghasilkan package-list untuk live-build. CLI ini TIDAK
+#                   dipanggil saat build.
+#   - runtime     : berkas ini. Melihat identitas, melihat/memeriksa profile,
+#                   dan memasang profile lewat apt-get.
+#
+# Keduanya membaca file profile yang SAMA
+# (usr/share/oracle/profiles/<nama>.list), sehingga aturan validasinya harus
+# identik. Kalau salah satu diubah, ubah keduanya.
 #
 # Prinsip keamanan:
 #   - Nama profile divalidasi terhadap daftar file yang ADA. Input user tidak
 #     pernah dieksekusi sebagai shell command, tidak pernah masuk ke `eval`,
 #     dan tidak pernah digabung ke string perintah.
-#   - Pemasangan runtime wajib lewat sudo, memakai apt-get dengan penanganan
-#     error, dan tidak melanjutkan kalau apt gagal.
+#   - Nama paket divalidasi SEBELUM apt-get dipanggil.
+#   - Pemasangan runtime wajib lewat sudo dan tidak melanjutkan kalau apt gagal.
 #
 # Sengaja ditulis POSIX sh: image belum tentu punya bash.
 # ============================================================================
@@ -75,6 +85,14 @@ profile_names() {
 }
 
 valid_name() {
+	# Aturan tunggal, HARUS identik dengan scripts/gen-profile-list.sh:
+	# huruf kecil, angka, tanda hubung, 1..32 karakter, tidak diawali '-'.
+	#
+	# Dulu ada pra-cek `case` di sini. Pra-cek itu tidak membatasi panjang,
+	# sehingga nama 33+ karakter lolos pra-cek lalu ditolak regex — dua aturan
+	# untuk satu hal, dan yang lebih longgar sempat menang. Dihapus; regex ini
+	# satu-satunya sumber kebenaran. Tidak ada spasi di-strip: 'net working'
+	# harus DITOLAK, bukan dirapikan menjadi 'networking'.
 	printf '%s' "$1" | grep -Eq '^[a-z0-9][a-z0-9-]{0,31}$'
 }
 
@@ -84,9 +102,57 @@ profile_path() {
 	printf '%s/%s.list' "$PROFILE_DIR" "$1"
 }
 
+# ---------------------------------------------------------------------------
+# Pembacaan package-list
+#
+# Aturan di sini HARUS identik dengan scripts/gen-profile-list.sh. Kalau
+# berbeda, dua konsumen file profile yang sama akan menerima input berbeda —
+# dan itu bug, bukan pilihan.
+#
+# Kesalahan yang pernah terjadi dan tidak boleh kembali:
+#   - 's/[[:space:]]//g' menghapus spasi DI TENGAH, sehingga 'ip route2'
+#     menjadi 'iproute2' dan ' bad name ' menjadi 'badname'. Salah tulis
+#     jadi nama paket sah, tanpa peringatan.
+#   - for x in $var memecah input pada spasi.
+# Perbaikan: baca per baris, buang hanya spasi di ujung, validasi tiap entri.
+# ---------------------------------------------------------------------------
+PKG_RE='^[a-z0-9][a-z0-9+.-]*$'
+
+# Baca file profile -> satu entri per baris di stdout.
+# Komentar (#) dan baris kosong dibuang. Spasi di ujung dibuang.
+profile_entries() {
+	awk '{ sub(/#.*/, ""); gsub(/^[ 	]+|[ 	]+$/, ""); if (length) print }' "$1"
+}
+
+# Validasi seluruh isi profile. Mengembalikan non-zero dan mencetak entri
+# pertama yang tidak valid ke stderr. Dipakai SEBELUM apt dipanggil.
+profile_validate() {
+	vf="$1"
+	bad=""
+	badline=0
+	ln=0
+	while IFS= read -r entry; do
+		ln=$((ln + 1))
+		[ -n "$entry" ] || continue
+		if ! printf '%s' "$entry" | grep -Eq "$PKG_RE"; then
+			bad="$entry"
+			badline=$ln
+			break
+		fi
+	done <<EOF
+$(profile_entries "$vf")
+EOF
+	if [ -n "$bad" ]; then
+		err "nama paket tidak valid di $vf (baris $badline): '$bad'"
+		err "aturan: ^[a-z0-9][a-z0-9+.-]*$  (huruf kecil, angka, + . -)"
+		return 1
+	fi
+	return 0
+}
+
 profile_packages() {
-	# Buang komentar dan baris kosong. Output: satu paket per baris.
-	sed -e 's/#.*//' -e 's/[[:space:]]//g' "$1" | grep -v '^$'
+	# Entri sudah tervalidasi oleh pemanggil; keluaran tetap satu paket per baris.
+	profile_entries "$1"
 }
 
 cmd_profile_list() {
@@ -105,6 +171,8 @@ cmd_profile_check() {
 	[ $# -eq 1 ] || die "pakai: oracle profile check NAME"
 	p="$(profile_path "$1")"
 	[ -f "$p" ] || die "profile '$1' tidak ada. Lihat: oracle profile list"
+	# Ditolak di sini, bukan nanti saat apt gagal dengan pesan membingungkan.
+	profile_validate "$p" || die "profile '$1' berisi nama paket tidak valid; tidak ada yang dipasang."
 	say "Profile : $1"
 	say "File    : $p"
 	say "Paket   :"
@@ -122,8 +190,11 @@ cmd_profile_install() {
 	p="$(profile_path "$1")"
 	[ -f "$p" ] || die "profile '$1' tidak ada. Lihat: oracle profile list"
 
-	# Daftar paket dibaca ke variabel, lalu diteruskan sebagai argumen terpisah.
-	# Tidak ada eval, tidak ada string perintah yang dirakit dari input.
+	# Validasi SELURUH isi sebelum apt dipanggil. Tanpa ini, satu baris buruk
+	# membuat apt menerima argumen asing dan gagal dengan pesan yang menyesatkan
+	# — atau memasang sebagian.
+	profile_validate "$p" || die "profile '$1' berisi nama paket tidak valid; tidak ada yang dipasang."
+
 	pkgs="$(profile_packages "$p")"
 	[ -n "$pkgs" ] || die "profile '$1' tidak berisi paket"
 

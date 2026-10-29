@@ -2,9 +2,29 @@
 # ============================================================================
 # image/auto/config — konfigurasi `lb config` untuk ORACLE OS
 #
-# File ini dijalankan OTOMATIS oleh `lb config`. Isinya hanya flag.
-# Semua nilai yang berhubungan dengan identitas proyek dibaca dari
-# config/oracle.conf supaya tidak ada dua sumber kebenaran.
+# PEMILIK TUNGGAL FLAG lb config. Tidak ada tempat lain yang menetapkan opsi
+# distribusi, arsitektur, atau area arsip. scripts/build.sh hanya memicu
+# `lb config` tanpa argumen; berkas inilah yang mengisi opsinya.
+#
+# KENAPA `noauto` — jangan dihapus
+# `lb config` menjalankan berkas ini secara OTOMATIS. Tanpanya, setiap
+# pemanggilan `lb config` di dalam berkas ini akan menjalankan berkas ini
+# lagi, lalu memanggil `lb config` lagi — rekursi tanpa henti sampai proses
+# kehabisan sumber daya. Manual Debian Live 6.1.2:
+#
+#   "A special noauto parameter is used here to suppress another call to
+#    auto/config, thereby preventing infinite recursion. Make sure you don't
+#    accidentally remove it when making edits."
+#
+# KENAPA `"${@}"` — juga jangan dihapus
+# Manual yang sama meneruskan argumen pemanggil ke pemanggilan dalam. Tanpa
+# ini, `lb config --verbose` atau `lb config --force` dari luar akan hilang
+# diam-diam di dalam berkas ini.
+#
+# Alur akhirnya tepat SATU konfigurasi efektif:
+#   build.sh  →  lb config                (memicu berkas ini)
+#                   →  auto/config        (dijalankan otomatis, sekali)
+#                       →  lb config noauto <flag> "${@}"   (konfigurasi nyata)
 # ============================================================================
 
 set -eu
@@ -12,7 +32,18 @@ set -eu
 # Baca identitas proyek dari satu tempat saja.
 . "${ORACLE_ROOT}/config/oracle.conf"
 
-lb config \
+# Hanya huruf kecil, angka, dan tanda hubung yang boleh masuk nama volume ISO;
+# ISO9660 tidak menerima karakter di luar itu.
+printf '%s' "${ID}" | grep -Eq '^[a-z0-9][a-z0-9-]*$' \
+	|| { echo "[oracle] FATAL: ID '$ID' tidak valid untuk nama volume ISO" >&2; exit 1; }
+
+# Uppercase TANPA ${ID^^}: berkas ini ber-shebang #!/bin/sh dan di Debian
+# /bin/sh adalah dash, yang menolak ${var^^} dengan "Bad substitution".
+# `tr` adalah POSIX dan tersedia di semua shell.
+ISO_VOLUME="$(printf '%s' "${ID}" | tr 'a-z' 'A-Z')"
+
+# `noauto` mencegah rekursi; "${@}" meneruskan argumen pemanggil.
+lb config noauto \
 	--distribution "${DEBIAN_CODENAME}" \
 	--architecture amd64 \
 	--binary-images iso-hybrid \
@@ -25,4 +56,5 @@ lb config \
 	--memtest none \
 	--iso-application "${NAME}" \
 	--iso-publisher "${NAME} ${VERSION}" \
-	--iso-volume "${ID^^}"
+	--iso-volume "${ISO_VOLUME}" \
+	"${@}"

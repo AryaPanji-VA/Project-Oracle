@@ -96,20 +96,7 @@ mkdir -p -- "${BUILD_DIR}"
 log "menyalin sumber image/ -> build/"
 cp -a -- "${SOURCE_DIR}/." "${BUILD_DIR}/"
 
-# Identitas disalin MASUK ke image. Hook berjalan di dalam chroot, tempat
-# ${ORACLE_ROOT} tidak ada, jadi hook membaca /etc/oracle/oracle.conf ini.
-# Tanpa langkah ini build gagal: "ORACLE_ROOT: unbound variable".
-install -d -m 0755 "${BUILD_DIR}/config/includes.chroot/etc/oracle"
-install -m 0644 "${ORACLE_ROOT}/config/oracle.conf" \
-	"${BUILD_DIR}/config/includes.chroot/etc/oracle/oracle.conf"
-
-# Profile terpilih ikut masuk ke image, dibaca hook 0200 saat build.
-install -m 0644 "${ORACLE_ROOT}/config/profiles.conf" \
-	"${BUILD_DIR}/config/includes.chroot/etc/oracle/profiles.conf"
-
 chmod +x "${BUILD_DIR}/auto/config"
-chmod +x "${BUILD_DIR}/config/includes.chroot/usr/local/bin/oracle"
-find "${BUILD_DIR}/config/hooks" -type f -name '*.hook.*' -exec chmod +x {} + 2>/dev/null || true
 
 # ---------------------------------------------------------------------------
 # Image builder: sekali bangun, dipakai berulang.
@@ -122,13 +109,133 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Build di dalam container.
+# TAHAP 1 — `lb config`
+#
+# `lb build` TIDAK berdiri sendiri. Tanpa `lb config` lebih dulu, live-build
+# berhenti dengan:
+#     E: the following stage is required to be done first: config
+#
+# Pemanggilan ini TANPA argumen: seluruh opsi lb config dimiliki oleh
+# image/auto/config, yang dijalankan otomatis oleh `lb config`. auto/config
+# memakai `noauto` sehingga konfigurasi hanya terjadi sekali, bukan rekursif.
+# Jangan menambah flag di sini — itu membuat dua pemilik konfigurasi.
+# ---------------------------------------------------------------------------
+log "tahap 1/2: lb config (menyiapkan config/ untuk live-build)"
+$PODMAN run --rm -it \
+	--privileged \
+	--userns=host \
+	-v "${ORACLE_ROOT}:/work:Z" \
+	-e ORACLE_ROOT=/work \
+	-e HOME=/root \
+	-w /work/build \
+	"${BUILDER_IMAGE}" \
+	/bin/sh -c 'lb config'
+
+# ---------------------------------------------------------------------------
+# Bukti tahap config selesai — JANGAN pakai `config/` sebagai penanda.
+#
+# build/config SUDAH ADA sebelum lb config, karena `cp -a image/. build/`
+# menyalin image/config beserta isinya. Memeriksa `config/` karenanya tidak
+# membuktikan apa pun.
+#
+# Yang dipakai sebagai penanda HANYA yang tersurat di dokumentasi:
+#   lb_config(1) menyebut config/ berisi berkas
+#   config/{binary,bootstrap,chroot,common,source} yang dihasilkan lb config.
+# `config/binary` karenanya bukti sah.
+#
+# `.build/` TIDAK dipakai sebagai syarat gagal. Keberadaannya adalah asumsi
+# (direktori internal live-build, tidak dijamin oleh manpage). Menjadikannya
+# syarat bisa membuat build yang sebenarnya benar ikut berhenti. Kalau ada,
+# dicatat; kalau tidak ada, hanya peringatan.
+# ---------------------------------------------------------------------------
+if [ ! -e "${BUILD_DIR}/config/binary" ]; then
+	die "tahap 'lb config' GAGAL: ${BUILD_DIR}/config/binary tidak ada.
+
+  Berkas itu dihasilkan oleh 'lb config' (lb_config(1) menyebut
+  config/{binary,bootstrap,chroot,common,source} sebagai berkas konfigurasi
+  yang dibuatnya). Direktori config/ sendiri TIDAK bisa dipakai sebagai bukti,
+  karena sudah ada sejak image/ disalin.
+
+  Periksa log lb config di atas. Kemungkinan penyebab:
+    - auto/config gagal (mis. ORACLE_ROOT salah di dalam container)
+    - noauto hilang sehingga terjadi rekursi
+    - image builder tidak lengkap"
+fi
+
+if [ -d "${BUILD_DIR}/.build" ]; then
+	log "tahap config terverifikasi (config/binary ada, .build ada)"
+else
+	# Bukan kegagalan: keberadaan .build/ tidak dijamin dokumentasi.
+	log "tahap config terverifikasi (config/binary ada; catatan: .build/ tidak ada)"
+fi
+
+# ---------------------------------------------------------------------------
+# TAHAP 2 — aset proyek DIPULIHKAN setelah `lb config`
+#
+# Kenapa dipulihkan, bukan sekadar "ditulis sekali di awal": `lb config`
+# mempopulasi config/ dan dapat membuang/mengganti isi includes.chroot serta
+# package-lists. Apa pun yang ditaruh di sana sebelum tahap config bisa
+# hilang, jadi seluruhnya disalin ULANG dari image/ (sumber asli), bukan dari
+# build/ yang sudah disentuh live-build.
+#
+# PENTING: yang dipulihkan adalah SELURUH package-lists/, bukan hanya file
+# hasil generator. oracle-core.list.chroot berisi paket inti (live-boot,
+# live-config, kernel, sudo). Kalau hanya file profile yang dipulihkan,
+# paket inti bisa hilang tanpa suara dan image dibangun tanpa sistem dasar.
+# ---------------------------------------------------------------------------
+INCLUDES="${BUILD_DIR}/config/includes.chroot"
+mkdir -p "${INCLUDES}"
+cp -a -- "${SOURCE_DIR}/config/includes.chroot/." "${INCLUDES}/"
+
+# Pulihkan SELURUH package-lists dari sumber (oracle-core dan apa pun yang
+# ditambahkan nanti). File hasil generator ditulis sesudah ini.
+PACKAGE_LISTS="${BUILD_DIR}/config/package-lists"
+mkdir -p "${PACKAGE_LISTS}"
+cp -a -- "${SOURCE_DIR}/config/package-lists/." "${PACKAGE_LISTS}/"
+
+# Bukti: paket inti harus benar-benar ada dan tidak kosong.
+[ -s "${PACKAGE_LISTS}/oracle-core.list.chroot" ] || die "oracle-core.list.chroot hilang atau kosong setelah lb config.
+  Tanpa paket inti, image tidak akan punya live-boot/kernel. Build dihentikan."
+
+# Identitas disalin MASUK ke image. Hook berjalan di dalam chroot, tempat
+# ${ORACLE_ROOT} tidak ada, jadi hook membaca /etc/oracle/oracle.conf ini.
+# Tanpa langkah ini build gagal: "ORACLE_ROOT: unbound variable".
+install -d -m 0755 "${INCLUDES}/etc/oracle"
+install -m 0644 "${ORACLE_ROOT}/config/oracle.conf" \
+	"${INCLUDES}/etc/oracle/oracle.conf"
+
+# Profile terpilih ikut masuk ke image, dibaca CLI saat runtime.
+install -m 0644 "${ORACLE_ROOT}/config/profiles.conf" \
+	"${INCLUDES}/etc/oracle/profiles.conf"
+
+# Hook proyek: juga dipulihkan, karena `lb config` menata ulang config/hooks.
+if [ -d "${SOURCE_DIR}/config/hooks" ]; then
+	mkdir -p "${BUILD_DIR}/config/hooks"
+	cp -a -- "${SOURCE_DIR}/config/hooks/." "${BUILD_DIR}/config/hooks/"
+fi
+
+# Package-list dari profile. Ditulis di sini (setelah lb config) supaya tidak
+# tertimpa, tetapi tetap jauh SEBELUM lb build sehingga paket inti dan paket
+# profile dipasang lewat satu jalur yang sama.
+PACKAGE_LIST="${BUILD_DIR}/config/package-lists/oracle-profiles.list.chroot"
+PROFILES_CONF="${ORACLE_ROOT}/config/profiles.conf" \
+PROFILE_DIR="${BUILD_DIR}/config/includes.chroot/usr/share/oracle/profiles" \
+OUT="${PACKAGE_LIST}" \
+	"${ORACLE_ROOT}/scripts/gen-profile-list.sh"
+
+# `lb config` menyiapkan symlink hook; pastikan hook proyek tetap executable
+# dan CLI punya bit eksekusi di dalam image.
+chmod +x "${INCLUDES}/usr/local/bin/oracle"
+find "${BUILD_DIR}/config/hooks" -type f -name '*.hook.*' -exec chmod +x {} + 2>/dev/null || true
+
+# ---------------------------------------------------------------------------
+# TAHAP 3 — `lb build`
 #   --privileged  : lb build perlu mount loop & chroot ke dalam image
 #   --userns=host : tanpa pemetaan UID; keep-id dihapus karena memblokir mount
 #   -w /work/build: live-build menulis config/binary/chroot di sini, BUKAN di
 #                   root repo, sehingga config/oracle.conf proyek aman
 # ---------------------------------------------------------------------------
-log "mulai build image (lama; output live-build menyusul)"
+log "tahap 2/2: lb build"
 $PODMAN run --rm -it \
 	--privileged \
 	--userns=host \
