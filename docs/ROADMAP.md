@@ -83,7 +83,7 @@ Deliverables:
 
 ### Phase 1 — First Bootable ORACLE OS
 
-**Status:** Planned
+**Status:** In Progress
 
 **Goal:** Menghasilkan image Linux minimal berbasis Debian menggunakan `live-build` (Debian Live) dan membuktikan bahwa image tersebut dapat di-boot.
 
@@ -92,13 +92,17 @@ Deliverables:
 Tasks:
 
 - [ ] Memahami cara kerja Debian Live dan `live-build`.
-- [ ] Menentukan lingkungan build yang aman dan terpisah.
+- [x] Menentukan lingkungan build yang aman dan terpisah (VM Debian 13 disposable; NAT, tanpa disk/shared folder host; smoke test rootful Podman lulus).
 - [ ] Menyiapkan konfigurasi image minimal ORACLE OS.
 - [ ] Menentukan paket awal yang benar-benar diperlukan.
-- [ ] Menjalankan proses build image.
-- [ ] Memverifikasi file image dan hasil build.
+- [x] Menjalankan proses build image (berhasil di VM Debian 13 pada 2026-10-31).
+- [x] Memverifikasi file image dan hasil build (format ISO9660/hybrid, checksum cocok).
 - [ ] Menjalankan image menggunakan QEMU.
 - [ ] Mendokumentasikan hasil pengujian dan masalah yang ditemukan.
+
+**Catatan build (2026-10-31):** ISO `build/live-image-amd64.hybrid.iso`
+berhasil dibuat dan checksum dicatat di `build/SHA256SUMS`. Format media telah
+diperiksa, tetapi ISO belum di-boot; milestone First Boot tetap belum tercapai.
 
 Deliverables:
 

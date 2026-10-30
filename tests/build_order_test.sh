@@ -26,6 +26,8 @@
 set -uo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT_BUILD_WAS_PRESENT=0
+[ -d "$ROOT/build" ] && ROOT_BUILD_WAS_PRESENT=1
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
@@ -380,7 +382,18 @@ b2="$(grep -n '^lb build$'  "$LOG" | head -1 | cut -d: -f1)"
 # --- Repo asli tidak berubah --------------------------------------------
 echo
 echo "== repo asli tidak tersentuh =="
-[ ! -d "$ROOT/build" ] && ok "tidak ada build/ di repo asli" || no "build/ muncul di repo asli"
+# build/ adalah artefak gitignored dan boleh sudah ada sebelum test dimulai.
+# Yang diuji adalah bahwa test tidak membuat atau menghapusnya pada repo asli.
+# Salinan test memakai $REPO; repo asli harus mempertahankan state awalnya.
+if [ "${ROOT_BUILD_WAS_PRESENT}" -eq 1 ]; then
+	[ -d "$ROOT/build" ] \
+		&& ok "build/ repo asli tetap ada seperti sebelum test" \
+		|| no "build/ repo asli terhapus oleh test"
+else
+	[ ! -e "$ROOT/build" ] \
+		&& ok "build/ repo asli tetap tidak ada seperti sebelum test" \
+		|| no "build/ muncul di repo asli"
+fi
 if git -C "$ROOT" rev-parse --git-dir >/dev/null 2>&1; then
 	dirty="$(git -C "$ROOT" status --porcelain -- build tests/__nonexistent 2>/dev/null || true)"
 	[ -z "$dirty" ] && ok "git status bersih untuk build/" || no "git status kotor: $dirty"

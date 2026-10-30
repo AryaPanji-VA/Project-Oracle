@@ -18,6 +18,9 @@
 live-boot
 live-config
 live-config-systemd
+# live-config needs user-setup to create the live account/autologin.
+# APT recommends are disabled in image/auto/config, so include it explicitly.
+user-setup
 
 # --- Boot & init ------------------------------------------------------------
 systemd

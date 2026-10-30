@@ -1,19 +1,61 @@
 # ORACLE OS — Status
 
 > Living document. Perbarui setiap sesi kerja.
-> Terakhir diperbarui: 2026-10-30.
+> Terakhir diperbarui: 2026-10-31.
 
 ## Kondisi terkini
 
 | Item | Kondisi |
 |---|---|
-| Branch | `main`; commit lokal belum dipush |
-| Working tree | Ada perubahan dokumentasi Phase 0; periksa `git status` sebelum commit |
-| Podman | 6.1.4 terpasang; paket Podman terkait sudah dipasang ulang |
+| Branch | `main`; `f200d08` sama dengan `origin/main` |
+| Working tree | `docs/STATUS.md` dan `docs/ROADMAP.md` memiliki perubahan lokal belum di-commit; `build/` diabaikan Git |
+| Podman host | 6.1.4 terpasang; paket Podman terkait sudah dipasang ulang |
 | Rootful bridge | Gagal DNS dan TCP egress; network `podman` tercatat `dns_enabled=false` |
-| Jalur build | `--network=host` lolos tes; script mewajibkan VM sebelum build privileged |
-| VM build | Belum dibuat atau diuji; jalankan build hanya di VM NAT tanpa disk/folder host |
-| ISO/build/boot | Belum dibangun atau diuji |
+| Jalur build | QEMU Debian 13, Podman rootful, dan container `--network=host` lulus smoke test di VM NAT |
+| VM build | Debian 13 guest di `~/VMs/oracle-debian13/`; sudah dimatikan normal setelah build. QEMU memakai TCG karena `/dev/kvm` tidak tersedia di environment ini |
+| Build ISO | **Berhasil** di guest; `build/live-image-amd64.hybrid.iso` (786 MiB), checksum cocok |
+| Boot ISO ORACLE | **Belum diuji**; boot QEMU menunggu persetujuan terpisah |
+
+## Persiapan Phase 1 — VM build (2026-10-30)
+
+- CPU melaporkan flag VT-x (`vmx`), tetapi `/dev/kvm` tidak terlihat dari
+  environment eksekusi ini. QEMU 11.1.2 berhasil menjalankan Debian memakai
+  TCG (emulasi software), sehingga lebih lambat daripada akselerasi KVM.
+- Image cloud Debian 13 generic AMD64 diunduh dari direktori resmi Debian
+  `cloud.debian.org/images/cloud/trixie/latest/`; SHA-512 cocok dengan
+  `SHA512SUMS`. Image dasar disimpan sebagai
+  `~/VMs/oracle-debian13/debian-13-generic-amd64.qcow2`.
+- Overlay disk VM baru, `oracle-builder.qcow2`, berukuran virtual 50 GiB dan
+  memakai image cloud sebagai backing file. Guest berhasil boot, membesar ke
+  50 GiB, dan dimatikan dengan shutdown normal.
+- Guest Debian 13 memiliki Podman 5.4.2, Git, dan sudo. Akun `oraclebuild`
+  memakai kunci SSH khusus yang disimpan di folder VM; password login dinonaktifkan.
+  Sudo tanpa password hanya dikonfigurasi di VM disposable ini.
+- QEMU memakai user-mode NAT, tanpa disk fisik atau mount/shared folder host.
+  Akses SSH diteruskan hanya ke loopback host (`127.0.0.1:2223` saat build).
+- Smoke test `sudo podman run --rm --privileged --network=host debian:13 ...`
+  berhasil melakukan DNS untuk `deb.debian.org` dan koneksi TCP ke `1.1.1.1:443`.
+- File `debian-13.7.0-amd64-netinst.iso` di folder VM adalah unduhan lama yang
+  belum lengkap (364 MiB; checksum tidak cocok). File itu dipertahankan dan
+  tidak digunakan.
+- Checkout tersalin ke guest melalui SSH/SCP (tanpa mount folder bersama).
+  `./scripts/build.sh --check` lulus sebelum build.
+
+## Hasil build Phase 1 (2026-10-31)
+
+- Build `./scripts/build.sh` sukses di Debian 13 guest dengan Podman rootful,
+  image builder `oracle-builder:13`, dan `live-build 20250505+deb13u1`.
+- ISO tersimpan di `build/live-image-amd64.hybrid.iso` (786 MiB; 402432 sektor).
+  Identifikasi file menunjukkan ISO9660 bootable dengan label `ORACLE` dan
+  boot sector DOS/MBR. Ini memeriksa format media; **belum membuktikan OS boot**.
+- SHA-256 diverifikasi di guest dan setelah disalin ke host:
+  `fd52ab755d2ad10e5a24f830a292bfd17010447f327bfb7b5364cb4c94142467`.
+  Checksum tersimpan di `build/SHA256SUMS`.
+- Root filesystem squashfs: 648 MiB terkompresi, 49.21% dari ukuran asal
+  (sekitar 1.29 GiB); 22,222 inode. Build menarik beragam paket firmware Debian,
+  termasuk firmware grafis dan jaringan; ukuran/seleksi firmware perlu ditinjau.
+- Tidak ada boot ISO ORACLE, akses disk host, USB, atau instalasi yang dilakukan.
+  Tahap selanjutnya adalah inspeksi isi ISO dan boot uji QEMU setelah disetujui.
 
 ## Verifikasi dokumentasi dan repo (2026-10-30)
 
@@ -23,8 +65,9 @@
 - Pemeriksaan sintaks shell lulus untuk skrip Bash dan skrip POSIX shell.
 - `./tests/run_all.sh --quiet`: **7/7 test, 180 assertion lulus**.
 - `git diff --check` lulus.
-- Tidak dijalankan build ISO maupun boot; hasil test otomatis memakai mock
-  untuk alur Podman/live-build.
+- Tidak dijalankan build ISO ORACLE maupun boot image ORACLE; hasil test
+  otomatis memakai mock untuk alur Podman/live-build. Boot Debian di QEMU
+  hanya untuk menyiapkan dan menguji VM build.
 
 `--network=host` melewati bridge untuk build. Di VM, builder berbagi jaringan
 dan perangkat VM; jangan pass-through disk host atau share checkout asli.
@@ -36,9 +79,9 @@ dan perangkat VM; jangan pass-through disk host atau share checkout asli.
 | Branch | `main` |
 | Working tree | (lihat kondisi terkini di atas) |
 | Podman | (lihat kondisi terkini di atas) |
-| QEMU | belum diverifikasi saat audit terakhir |
-| Disk kosong | belum diverifikasi saat audit terakhir |
-| ISO terbangun | **belum ada — belum pernah sekali pun** |
+| QEMU | 11.1.2 terpasang; Debian cloud guest dipakai untuk build Phase 1 |
+| Disk host kosong | 134 GiB tersedia pada audit ini; disk guest virtual 50 GiB |
+| ISO terbangun | `build/live-image-amd64.hybrid.iso`, 786 MiB; SHA-256 tercatat di atas |
 
 ## Temuan audit (Prioritas A)
 
@@ -242,9 +285,10 @@ Satu perintah menjalankan semuanya:
 | `tests/profile_list_test.sh` | 25 lulus, 0 gagal |
 | `tests/cli_test.sh` | 17 lulus, 0 gagal |
 | `tests/cli_packages_test.sh` | 45 lulus, 0 gagal |
+| `tests/containerfile_test.sh` | 26 lulus, 0 gagal |
 | `tests/lb_config_flow_test.sh` | 17 lulus, 0 gagal |
-| `tests/build_order_test.sh` | 33 lulus, 0 gagal |
-| **Total** | **151 assertion, 6/6 tes lulus** |
+| `tests/build_order_test.sh` | 36 lulus, 0 gagal |
+| **Total (hasil audit ulang 2026-10-30)** | **180 assertion, 7/7 tes lulus** |
 
 Validasi sintaks:
 
@@ -260,7 +304,7 @@ Catatan historis: `./scripts/build.sh --check` pernah exit 1 saat Podman belum
 terpasang. Kondisi itu sudah berubah; jangan gunakan hasil lama sebagai status
 host terkini.
 
-### Keterbatasan pengujian — baca sebelum mengklaim apa pun
+### Batas pengujian otomatis (audit sebelum build nyata 2026-10-31)
 
 Batas tegas antara **tiruan** dan **live-build asli**:
 
@@ -276,13 +320,14 @@ Batas tegas antara **tiruan** dan **live-build asli**:
    bash. dash dan busybox tidak terpasang; memasangnya butuh sudo. Lulus
    `posix_test.sh` berarti "tidak ada pola bashism yang dikenal", **bukan**
    "sudah terbukti jalan di dash".
-2. **live-build tidak pernah dijalankan.** `lb config` dan `lb build` tidak
-   ada di mesin ini. Semua tes alur memakai tiruan. Perilaku `lb config` yang
-   sebenarnya — termasuk apakah ia benar-benar menghapus `includes.chroot` dan
-   `package-lists` — **belum terverifikasi**.
-3. **podman tidak pernah dijalankan.** Tidak ada container yang dibuat.
+2. **Pada audit saat itu live-build belum dijalankan.** Sejak itu, build nyata
+   sukses di VM Debian 13; hasil dan batas verifikasinya tercatat di bagian
+   “Hasil build Phase 1”.
+3. **Pada audit saat itu Podman belum dijalankan.** Build nyata kemudian
+   berjalan di container builder rootful di guest.
 4. **`apt-get` selalu palsu.** Tidak ada paket dipasang di host.
-5. **Tidak ada ISO.** Tidak ada klaim build berhasil, tidak ada klaim boot.
+5. **ISO belum di-boot.** Build berhasil, tetapi perilaku runtime image belum
+   terverifikasi sampai uji QEMU dilakukan.
 
 ### Verifikasi bahwa tes benar-benar bisa gagal
 
@@ -663,10 +708,9 @@ Status jaringan dan paket di dalamnya sudah kedaluwarsa.
    - Build script ready ✅
    - Can start immediately when approved
 
-### Decision Required
+### Status of this historical snapshot
 
-Build still requires a deliberate user start from the host terminal with normal
-interactive `sudo`. The real build and boot remain unverified.
-
-Current status: **READY, AWAITING APPROVAL**
-| Build ISO nyata | ❌ belum pernah dijalankan |
+Arahan snapshot ini untuk memulai build dari host sudah digantikan oleh workflow
+Phase 1 terbaru di bagian atas: build berjalan di VM Debian disposable. ISO
+nyata telah dibangun; boot uji masih menunggu.
+| Build ISO nyata | ✅ berhasil; lihat hasil build Phase 1 di atas |
