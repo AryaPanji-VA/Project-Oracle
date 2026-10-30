@@ -48,7 +48,7 @@ Pengembangan dimulai dengan menggunakan kernel Linux yang sudah tersedia dan mem
 
 ### Phase 0 — Foundation & Project Specification
 
-**Status:** In Progress
+**Status:** Complete
 
 **Goal:** Menetapkan identitas, ruang lingkup, dan struktur dasar proyek sebelum membangun sistem.
 
@@ -58,9 +58,9 @@ Tasks:
 - [x] Membuat README awal.
 - [x] Membuat struktur direktori awal.
 - [x] Mendokumentasikan arsitektur dan keputusan teknis.
-- [ ] Menetapkan spesifikasi proyek secara tertulis.
-- [ ] Menetapkan workflow development dan testing.
-- [ ] Memverifikasi konfigurasi proyek dan struktur repository.
+- [x] Menetapkan spesifikasi proyek secara tertulis (`docs/SPECIFICATION.md`).
+- [x] Menetapkan workflow development dan testing (`docs/DEVELOPMENT.md`).
+- [x] Memverifikasi konfigurasi proyek dan struktur repository.
 
 Deliverables:
 
@@ -68,6 +68,7 @@ Deliverables:
 - `docs/ROADMAP.md`
 - `config/oracle.conf`
 - `docs/ARCHITECTURE.md`
+- `docs/SPECIFICATION.md`
 - `docs/DEVELOPMENT.md`
 - `.gitignore`
 
@@ -77,6 +78,8 @@ Deliverables:
 - Struktur proyek dipahami dan konsisten.
 - Keputusan teknis utama memiliki alasan yang jelas.
 - Tidak ada perubahan pada sistem utama yang diperlukan untuk menyelesaikan tahap ini.
+
+**Verifikasi Phase 0 (2026-10-30):** konfigurasi identitas dan struktur repo telah diperiksa; shell syntax, test suite, dan pemeriksaan diff dijalankan. Ini tidak mencakup build ISO atau boot.
 
 ### Phase 1 — First Bootable ORACLE OS
 

@@ -20,7 +20,9 @@
 ## Dokumentasi
 
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — rencana pengembangan dan acceptance criteria per fase.
+- [`docs/SPECIFICATION.md`](docs/SPECIFICATION.md) — ruang lingkup, kebutuhan, dan acceptance criteria proyek.
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — keputusan teknis: base system, build system, tooling, dan batas keamanan.
+- [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) — workflow development, pemeriksaan, testing, dan build terisolasi.
 - [`docs/STATUS.md`](docs/STATUS.md) — kondisi terkini, blocker, dan bukti verifikasi.
 - `config/oracle.conf` — identitas proyek (nama, ID, versi, base distribution, purpose).
 
@@ -33,7 +35,7 @@ Oracle-OS/
 │   ├── config/     #   package-lists & hooks
 │   └── Containerfile
 ├── config/         # identitas proyek: oracle.conf
-├── docs/           # ROADMAP.md, ARCHITECTURE.md, STATUS.md
+├── docs/           # spesifikasi, arsitektur, workflow, roadmap, status
 ├── scripts/        # build.sh
 └── build/          # workspace build — DIABAIKAN Git, dibuat ulang tiap build
 ```

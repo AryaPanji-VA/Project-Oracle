@@ -8,12 +8,23 @@
 | Item | Kondisi |
 |---|---|
 | Branch | `main`; commit lokal belum dipush |
-| Working tree | Bersih pada commit ini; cek `git status` untuk perubahan berikutnya |
+| Working tree | Ada perubahan dokumentasi Phase 0; periksa `git status` sebelum commit |
 | Podman | 6.1.4 terpasang; paket Podman terkait sudah dipasang ulang |
 | Rootful bridge | Gagal DNS dan TCP egress; network `podman` tercatat `dns_enabled=false` |
 | Jalur build | `--network=host` lolos tes; script mewajibkan VM sebelum build privileged |
 | VM build | Belum dibuat atau diuji; jalankan build hanya di VM NAT tanpa disk/folder host |
 | ISO/build/boot | Belum dibangun atau diuji |
+
+## Verifikasi dokumentasi dan repo (2026-10-30)
+
+- Spesifikasi proyek ditulis di `docs/SPECIFICATION.md` dan workflow di
+  `docs/DEVELOPMENT.md`; daftar identitas, konfigurasi image, paket inti,
+  profile, dan direktori sumber telah dicocokkan dengan repo.
+- Pemeriksaan sintaks shell lulus untuk skrip Bash dan skrip POSIX shell.
+- `./tests/run_all.sh --quiet`: **7/7 test, 180 assertion lulus**.
+- `git diff --check` lulus.
+- Tidak dijalankan build ISO maupun boot; hasil test otomatis memakai mock
+  untuk alur Podman/live-build.
 
 `--network=host` melewati bridge untuk build. Di VM, builder berbagi jaringan
 dan perangkat VM; jangan pass-through disk host atau share checkout asli.
