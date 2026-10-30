@@ -34,6 +34,7 @@ TESTS=(
 	"tests/profile_list_test.sh"   # generator package-list
 	"tests/cli_test.sh"            # CLI dasar
 	"tests/cli_packages_test.sh"   # parser & validasi paket CLI
+	"tests/containerfile_test.sh"  # statis: Containerfile & mount policy
 	"tests/lb_config_flow_test.sh" # alur konfigurasi lb (tiruan semantik)
 	"tests/build_order_test.sh"    # staging & urutan build (podman tiruan)
 )
@@ -56,22 +57,16 @@ for t in "${TESTS[@]}"; do
 		continue
 	fi
 
-	if [ "$QUIET" -eq 1 ]; then
-		out="$(bash "$t" 2>&1)"; rc=$?
-	else
+	out="$(bash "$t" 2>&1)"; rc=$?
+	if [ "$QUIET" -eq 0 ]; then
 		echo "--------------------------------------------------------------"
 		echo ">> $t"
 		echo "--------------------------------------------------------------"
-		bash "$t" 2>&1 | sed 's/^/   /'
-		rc=${PIPESTATUS[0]}
-		out=""
+		printf '%s\n' "$out" | sed 's/^/   /'
 	fi
 
 	# Ambil angka dari baris 'hasil: N lulus, M gagal'.
 	line="$(printf '%s' "$out" | grep '^hasil:' | tail -1)"
-	if [ -z "$line" ] && [ "$QUIET" -eq 0 ]; then
-		line="$(bash "$t" 2>&1 | grep '^hasil:' | tail -1)"
-	fi
 	p="$(printf '%s' "$line" | sed -n 's/^hasil: \([0-9]*\) lulus.*/\1/p')"
 	f="$(printf '%s' "$line" | sed -n 's/.*, \([0-9]*\) gagal.*/\1/p')"
 	p="${p:-0}"; f="${f:-0}"

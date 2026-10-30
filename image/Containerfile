@@ -9,7 +9,7 @@
 #   3. hasilnya bisa diulang siapa pun yang punya podman.
 #
 # Dibangun sekali dengan:
-#   podman build -t oracle-builder:13 -f image/Containerfile image/
+#   podman build --network=host -t oracle-builder:13 -f image/Containerfile image/
 # ============================================================================
 
 FROM debian:13
@@ -28,7 +28,21 @@ ENV DEBIAN_FRONTEND=noninteractive
 #   mtools/dosfstools: membuat bootloader EFI FAT             (dependensi live-build)
 #   ca-certificates : verifikasi mirror HTTPS
 #   file, rsync     : pemeriksaan artefak & staging
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# PENTING — kenapa `apt-get update` diperiksa terpisah:
+# `apt-get update` mengembalikan EXIT 0 walaupun SEMUA repo gagal di-resolve.
+# Terbukti dengan `--network none`: exit=0, tiga baris "Err: ... Temporary
+# failure resolving", dan "W: Some index files failed to download".
+# Tanpa pemeriksaan tambahan, kegagalan jaringan lolos diam-diam dan build
+# berlanjut ke apt-get install, yang gagal dengan pesan lebih membingungkan.
+#
+# Pemeriksaan: setelah update, harus ADA minimal satu berkas indeks
+# *_InRelease di /var/lib/apt/lists/. Glob yang tidak match dibiarkan apa
+# adanya oleh POSIX sh, jadi `[ -e "$1" ]` bernilai salah saat tidak ada
+# berkas — tepat seperti yang dibutuhkan.
+RUN apt-get update \
+    && set -- /var/lib/apt/lists/*_InRelease \
+    && [ -e "$1" ] \
+    && apt-get install -y --no-install-recommends \
         live-build \
         debootstrap \
         xorriso \

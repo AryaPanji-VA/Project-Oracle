@@ -38,6 +38,7 @@ echo "== build.sh: urutan lb config -> lb build =="
 # --- Salinan repo di TMP: repo asli tidak disentuh -----------------------
 cp -a "$ROOT" "$TMP/repo"
 rm -rf "$TMP/repo/.git" "$TMP/repo/build"
+touch "$TMP/repo/.git" # guard build.sh: simulasi marker root Git
 REPO="$TMP/repo"
 LOG="$TMP/calls.log"
 : > "$LOG"
@@ -131,6 +132,13 @@ exec "$@"
 FAKE
 chmod +x "$TMP/bin/sudo"
 
+# VM detector palsu: alur normal berjalan pada VM uji.
+cat > "$TMP/bin/systemd-detect-virt" <<'FAKE'
+#!/bin/sh
+printf 'kvm\n'
+FAKE
+chmod +x "$TMP/bin/systemd-detect-virt"
+
 echo "  repo salinan: $REPO"
 echo
 
@@ -138,6 +146,29 @@ echo
 export FAKE_LOG="$LOG"
 export FAKE_HOSTROOT="$REPO"
 export PATH="$TMP/bin:$PATH"
+
+# --- Bare metal harus ditolak sebelum workspace disentuh ------------------
+echo "== guard: build privileged ditolak di bare metal =="
+mkdir -p "$REPO/build"
+printf 'keep\n' > "$REPO/build/keep-marker"
+mkdir -p "$TMP/nonvm"
+cat > "$TMP/nonvm/systemd-detect-virt" <<'NONVM'
+#!/bin/sh
+printf 'none\n'
+exit 1
+NONVM
+chmod +x "$TMP/nonvm/systemd-detect-virt"
+out_host="$(cd "$REPO" && PATH="$TMP/nonvm:$PATH" ./scripts/build.sh 2>&1)"; rc_host=$?
+[ "$rc_host" -ne 0 ] \
+	&& ok "bare metal: build.sh berhenti (exit $rc_host)" \
+	|| no "bare metal: build.sh tidak ditolak"
+printf '%s' "$out_host" | grep -qi 'ditolak di bare metal' \
+	&& ok "bare metal: pesan mengarahkan ke VM" \
+	|| no "bare metal: pesan VM tidak jelas"
+[ -f "$REPO/build/keep-marker" ] \
+	&& ok "bare metal: workspace tidak terhapus" \
+	|| no "bare metal: build/ tersentuh sebelum guard"
+rm -rf "$REPO/build"
 out="$(cd "$REPO" && ./scripts/build.sh 2>&1)"; rc=$?
 
 [ "$rc" -eq 0 ] \

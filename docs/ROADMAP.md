@@ -3,7 +3,7 @@
 > **Status:** Early Development  
 > **Versi roadmap:** 0.1.0  
 > **Base distribution:** Debian 13 (trixie)  
-> **Build system:** Debian Live (`live-build`) di container Podman rootless  
+> **Build system:** Debian Live (`live-build`) di container Podman rootful
 > **Testing environment:** QEMU virtual machine  
 > **Project focus:** Linux systems learning and isolated cybersecurity lab
 
@@ -84,7 +84,7 @@ Deliverables:
 
 **Goal:** Menghasilkan image Linux minimal berbasis Debian menggunakan `live-build` (Debian Live) dan membuktikan bahwa image tersebut dapat di-boot.
 
-**Lingkungan build:** container Podman rootless berbasis Debian 13, sumber di `image/`, workspace di `build/`. Keputusan dan alasannya ada di `docs/ARCHITECTURE.md` §8.
+**Lingkungan build:** container Podman **rootful** (`sudo podman`) berbasis Debian 13, sumber di `image/`, workspace di `build/`. Dibutuhkan karena `lb build` memasang `/proc`, `/sys`, `/dev/pts` di dalam chroot image dan menjalankan `chroot(2)`. Keputusan dan alasannya ada di `docs/ARCHITECTURE.md` §8.
 
 Tasks:
 

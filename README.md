@@ -21,6 +21,7 @@
 
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — rencana pengembangan dan acceptance criteria per fase.
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — keputusan teknis: base system, build system, tooling, dan batas keamanan.
+- [`docs/STATUS.md`](docs/STATUS.md) — kondisi terkini, blocker, dan bukti verifikasi.
 - `config/oracle.conf` — identitas proyek (nama, ID, versi, base distribution, purpose).
 
 ## Struktur Repository
@@ -32,22 +33,31 @@ Oracle-OS/
 │   ├── config/     #   package-lists & hooks
 │   └── Containerfile
 ├── config/         # identitas proyek: oracle.conf
-├── docs/           # ROADMAP.md, ARCHITECTURE.md
+├── docs/           # ROADMAP.md, ARCHITECTURE.md, STATUS.md
 ├── scripts/        # build.sh
 └── build/          # workspace build — DIABAIKAN Git, dibuat ulang tiap build
 ```
 
 ## Build
 
-Butuh `podman`. Build berjalan di dalam container Debian 13, **bukan di host**:
+Jalankan build di dalam VM sementara (Debian 13 disarankan), bukan langsung di
+host utama. Script menolak build privileged di bare metal. Di dalam VM, build
+memakai Podman rootful (`sudo podman`) dan `--network=host`; VM tetap perlu
+koneksi keluar melalui NAT:
 
 ```bash
-sudo pacman -S podman     # sekali saja
-./scripts/build.sh --check   # cek prasyarat tanpa build
-./scripts/build.sh           # build image ISO
+sudo apt-get update && sudo apt-get install podman sudo  # di Debian VM
+./scripts/build.sh --check                         # cek prasyarat dasar
+./scripts/build.sh                                 # build image ISO
 ```
 
 Hasil build muncul di `build/` dan tidak pernah masuk Git.
+Setiap build menghapus seluruh workspace `build/` yang lama sebelum staging ulang;
+jangan simpan file manual di direktori itu.
+
+**Keamanan:** container builder memakai `--privileged` dan jaringan host VM.
+Jangan pasang disk fisik host atau gunakan folder bersama ke checkout asli.
+Salin repo ke VM, gunakan jaringan NAT, dan hapus VM setelah build selesai.
 
 ## Catatan
 

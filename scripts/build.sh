@@ -34,6 +34,9 @@ die()  { printf '\033[1;31m[oracle] ERROR:\033[0m %s\n' "$*" >&2; exit 1; }
 # Podman ROOTFUL (sudo). Alasan tercatat di docs/STATUS.md (B-2, B-3):
 # di rootless, --privileged tidak memberi CAP_SYS_ADMIN ke UID non-0 dan
 # pemetaan UID menghalangi bind mount, sehingga `lb build` gagal saat mount.
+# Host network dipakai karena uji rootful bridge gagal DNS/TCP, sedangkan
+# image yang sama berhasil dengan --network=host. Trade-off akses jaringan
+# host dicatat di docs/ARCHITECTURE.md.
 PODMAN="sudo podman"
 
 preflight() {
@@ -48,10 +51,19 @@ preflight() {
 
 	log "prasyarat dasar OK"
 	log "  identitas : ${NAME} ${VERSION} (${BASE} ${DEBIAN_RELEASE} ${DEBIAN_CODENAME})"
-	log "  builder   : ${BUILDER_IMAGE} (podman rootful)"
+	log "  builder   : ${BUILDER_IMAGE} (podman rootful, host network)"
 	if ! command -v qemu-system-x86_64 >/dev/null 2>&1; then
 		log "  catatan   : qemu belum ada — build bisa jalan, uji boot belum"
 	fi
+}
+
+require_build_vm() {
+	local virt
+	virt="$(systemd-detect-virt --vm 2>/dev/null || true)"
+	[ -n "$virt" ] && [ "$virt" != "none" ] || die "build privileged ditolak di bare metal.
+  Jalankan di VM sementara tanpa disk fisik host terpasang.
+  --check tetap bisa dipakai untuk memeriksa prasyarat dasar."
+	log "  VM build : ${virt}"
 }
 
 qemu_test() {
@@ -81,6 +93,7 @@ case "${1:-}" in
 esac
 
 preflight
+require_build_vm
 
 # ---------------------------------------------------------------------------
 # Workspace bersih. build/ adalah artefak yang bisa dibuat ulang, jadi
@@ -88,7 +101,10 @@ preflight
 # ("kok hasilnya sama padahal sudah diubah?").
 # ---------------------------------------------------------------------------
 if [ -d "${BUILD_DIR}" ]; then
-	log "membersihkan workspace lama: ${BUILD_DIR}"
+	[ "${BUILD_DIR}" = "${ORACLE_ROOT}/build" ] || die "menolak membersihkan path di luar workspace build: ${BUILD_DIR}"
+	[ -e "${ORACLE_ROOT}/.git" ] || die "menolak membersihkan build/ karena root Git tidak terverifikasi: ${ORACLE_ROOT}"
+	[ ! -L "${BUILD_DIR}" ] || die "menolak membersihkan build/ yang berupa symlink"
+	log "menghapus seluruh workspace build lama: ${BUILD_DIR}"
 	sudo rm -rf -- "${BUILD_DIR}"
 fi
 mkdir -p -- "${BUILD_DIR}"
@@ -103,7 +119,7 @@ chmod +x "${BUILD_DIR}/auto/config"
 # ---------------------------------------------------------------------------
 if ! $PODMAN image exists "${BUILDER_IMAGE}" 2>/dev/null; then
 	log "membangun builder ${BUILDER_IMAGE} (sekali saja, butuh jaringan)"
-	$PODMAN build -t "${BUILDER_IMAGE}" -f "${SOURCE_DIR}/Containerfile" "${SOURCE_DIR}"
+	$PODMAN build --network=host -t "${BUILDER_IMAGE}" -f "${SOURCE_DIR}/Containerfile" "${SOURCE_DIR}"
 else
 	log "builder ${BUILDER_IMAGE} sudah ada"
 fi
@@ -119,12 +135,23 @@ fi
 # image/auto/config, yang dijalankan otomatis oleh `lb config`. auto/config
 # memakai `noauto` sehingga konfigurasi hanya terjadi sekali, bukan rekursif.
 # Jangan menambah flag di sini — itu membuat dua pemilik konfigurasi.
+#
+# MOUNT (kedua tahap sama):
+#   /work       :ro   -> repo hanya DIBACA. build.sh terbukti hanya menulis
+#                       ke build/; image/ tidak pernah ditulis.
+#   /work/build :rw   -> satu-satunya jalur tulis. Dipasang terpisah karena
+#                       submount tidak ikut aturan :ro induknya.
+# Ini GUARDRAIL terhadap salah tulis, bukan kontrol keamanan: di container
+# --privileged, CAP_SYS_ADMIN cukup untuk `mount -o remount,rw`. Lihat
+# docs/ARCHITECTURE.md bagian "Blast radius".
 # ---------------------------------------------------------------------------
 log "tahap 1/2: lb config (menyiapkan config/ untuk live-build)"
 $PODMAN run --rm -it \
+	--network=host \
 	--privileged \
 	--userns=host \
-	-v "${ORACLE_ROOT}:/work:Z" \
+	-v "${ORACLE_ROOT}:/work:ro,Z" \
+	-v "${BUILD_DIR}:/work/build:rw,Z" \
 	-e ORACLE_ROOT=/work \
 	-e HOME=/root \
 	-w /work/build \
@@ -230,16 +257,22 @@ find "${BUILD_DIR}/config/hooks" -type f -name '*.hook.*' -exec chmod +x {} + 2>
 
 # ---------------------------------------------------------------------------
 # TAHAP 3 — `lb build`
-#   --privileged  : lb build perlu mount loop & chroot ke dalam image
+#   --privileged  : lb build memasang /proc, /sys, /dev/pts di dalam chroot
+#                   image (helper lb chroot_proc/sysfs/devpts) dan menjalankan
+#                   debootstrap yang memakai chroot(2). Keduanya butuh
+#                   CAP_SYS_ADMIN + CAP_SYS_CHROOT. Ini melumpuhkan isolasi
+#                   container — lihat docs/ARCHITECTURE.md "Blast radius".
 #   --userns=host : tanpa pemetaan UID; keep-id dihapus karena memblokir mount
 #   -w /work/build: live-build menulis config/binary/chroot di sini, BUKAN di
 #                   root repo, sehingga config/oracle.conf proyek aman
 # ---------------------------------------------------------------------------
 log "tahap 2/2: lb build"
 $PODMAN run --rm -it \
+	--network=host \
 	--privileged \
 	--userns=host \
-	-v "${ORACLE_ROOT}:/work:Z" \
+	-v "${ORACLE_ROOT}:/work:ro,Z" \
+	-v "${BUILD_DIR}:/work/build:rw,Z" \
 	-e ORACLE_ROOT=/work \
 	-e HOME=/root \
 	-w /work/build \

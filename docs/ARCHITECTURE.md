@@ -134,13 +134,40 @@ Use Debian `live-build` to construct the first images. Maintain the build config
 
 ### Build environment
 
-Builds run inside a **rootless Podman container based on Debian 13 (trixie)**, not on the host system.
+Builds run inside a **rootful Podman container based on Debian 13 (trixie)**, not on the host system.
 
-Reason: the host is an Arch-based Omarchy system, where `live-build` is not distributed through the official repositories. Running the build in a Debian container also keeps the host untouched and matches the Debian environment the image is built from.
+Reason for a container: the host is an Arch-based Omarchy system, where `live-build` is not packaged in the official repositories (and is absent from the AUR). Running the build in a Debian container keeps the host untouched and matches the Debian environment the image is built from.
 
-`podman` is used instead of `docker` because it runs rootless by default, so the build does not require membership of a privileged container group.
+Reason for rootful (`sudo podman`): `lb build` mounts `/proc`, `/sys`, and `/dev/pts` inside the image chroot, and `debootstrap` runs `chroot(2)`. These require `CAP_SYS_ADMIN` and `CAP_SYS_CHROOT` in the namespace that owns the mounts. Rootless Podman cannot satisfy this. Documented facts:
 
-The host must not be modified by the build. Any tooling change belongs inside the container image definition, not on the host.
+- `live-build(7)` lists dedicated helpers `lb chroot_proc`, `lb chroot_sysfs`, and `lb chroot_devpts`, i.e. mounting kernel filesystems is part of the build.
+- `debootstrap(8)` uses `chroot(2)`, which requires `CAP_SYS_CHROOT`.
+- Podman's own documentation states that rootless `--privileged` grants `CAP_SYS_ADMIN` only to UID 0 inside the container, and that user-namespace UID mapping blocks these mounts.
+
+The builder uses Podman's **host network** (`--network=host`) for image build and
+container runs. On the development host, the rootful bridge failed DNS and direct
+TCP egress; the same Debian 13 image succeeded with host networking. The build
+script now requires a VM, so this mode shares the VM's network namespace and still
+needs outbound access through the VM's NAT. It does not share the physical host's
+network namespace. Repairing the bridge path remains a separate task.
+
+Consequence, stated plainly: **the build container runs rootful with `--privileged`, which disables Podman's capability limits, device restrictions, read-only kernel mounts, and seccomp/AppArmor/SELinux confinement.** It also uses the VM's host network. The container can access VM devices and VM-local services, but not the physical host's devices unless they are passed through. This is why the build VM must not have host disks attached or a shared folder pointing at the source checkout.
+
+`sudo` is required for two things only: launching Podman rootful, and removing the previous `build/` directory, which ends up root-owned.
+
+### Blast radius of the build container
+
+Since `--privileged` removes container isolation, what the container *can* reach is the only meaningful boundary. As of this writing:
+
+- **Explicit bind mounts:** the project repository is mounted at `/work`, and `build/` at `/work/build`. The script does not explicitly bind-mount `/`, `/home`, `/etc`, `/var`, or device paths. `--privileged` still exposes host devices.
+- **Network namespace:** host networking is used, so the container shares the VM's network namespace and can reach VM-local services. It does not receive a separate network namespace.
+- **Mount propagation:** the default (`private`) is used. Mounts created inside the container do not propagate to the host.
+- **Write targets inside the project:** `scripts/build.sh` writes exclusively under `build/`. `image/` is only ever read (`cp` reads from it, writes into `build/`). This was verified by inspecting every write operation in the script; `image/` can therefore be mounted read-only.
+- **SELinux:** the host has no SELinux and no AppArmor, so the `:Z` relabel suffix is a no-op here.
+
+**What this does NOT mean:** mounting the source read-only does not make the container safe. Inside a privileged container `CAP_SYS_ADMIN` can remount bind mounts. The builder can modify the VM and reach VM-local services; run it only inside a disposable VM with no physical host disks or source-folder shares attached.
+
+Whether a *less* privileged configuration is possible has **not** been verified. Candidate options and their trade-offs are recorded in section 14 rather than assumed.
 
 ### Build workspace
 
@@ -268,7 +295,21 @@ These items should be resolved incrementally and documented when decisions are m
 ### Decided
 
 - **Debian release:** Debian **13 (trixie)** is the target base for v0.1. Debian 13 became the current stable release on 9 August 2025; version 13.7 was published on 12 September 2026. Debian 12 (bookworm) is now *oldstable* and is not used. The release is pinned in `config/oracle.conf` as `DEBIAN_RELEASE="13"` / `DEBIAN_CODENAME="trixie"`.
-- **Build environment:** rootless Podman container running Debian 13 (see section 8).
+- **Build environment:** **rootful** Podman container running Debian 13, launched via `sudo podman`, using `--privileged` and `--userns=host` (see section 8).
+
+### Container privilege — evaluated, not yet reduced
+
+The current build runs `--privileged`. That is known to be a blunt instrument; the question is whether anything narrower works. Nothing below has been tested. They are ranked by how much they would reduce exposure, and each is a candidate for verification once Podman is available.
+
+| Option | What it would change | Trade-off / why unverified |
+|---|---|---|
+| **Status quo:** `--privileged --userns=host`, rootful | Baseline | Works against the documented requirements, but disables all container confinement. |
+| `--cap-add SYS_ADMIN --cap-add SYS_CHROOT --cap-drop ALL` (rootful, no `--privileged`) | Keeps the two capabilities the build plausibly needs, drops the rest | Whether `lb build` also needs `CAP_MKNOD` (device nodes in the chroot) or `CAP_DAC_OVERRIDE` is unknown. Community reports of building live images in containers consistently end up at `--privileged`. Would need a real build to confirm. |
+| Rootless Podman with `--privileged` | No `sudo` needed | Documented as insufficient: rootless `--privileged` does not grant `CAP_SYS_ADMIN` to non-UID-0, and UID mapping blocks the kernel-filesystem mounts. Already tried conceptually and rejected; would need re-verification only if the mount strategy changes. |
+| Rootless + `debootstrap --variant=fakechroot` | Avoids real `chroot`/mounts via `fakechroot` | `fakechroot` emulates `chroot` by `LD_PRELOAD`. It does not cover `mount` at all, which `lb build` needs for `/proc`, `/sys`, `/dev/pts`. Also changes the build toolchain in ways upstream does not support for live-build. |
+| Pre-mounted host loop device passed into an unprivileged container | Bind-mount an already-mounted ISO/loop into the container | Requires the host to perform `losetup` + `mount` — i.e. the host gets *more* involvement, not less. Shifts privilege instead of removing it. |
+
+**Recommendation:** run the privileged build inside a disposable Debian VM with no host disks attached. Once a baseline build works there, try the `--cap-add` variant inside that VM and compare. Do not treat a read-only project mount as protection from a compromised privileged builder.
 
 ## 15. Architecture Summary
 

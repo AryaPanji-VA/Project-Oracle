@@ -1,18 +1,32 @@
 # ORACLE OS — Status
 
 > Living document. Perbarui setiap sesi kerja.
-> Terakhir diperbarui: 2026-10-29 (remediasi review final: alur `noauto`,
-> pemulihan package-lists, guard config, runner tes terpadu)
+> Terakhir diperbarui: 2026-10-30.
+
+## Kondisi terkini
+
+| Item | Kondisi |
+|---|---|
+| Branch | `main`; commit lokal belum dipush |
+| Working tree | Bersih pada commit ini; cek `git status` untuk perubahan berikutnya |
+| Podman | 6.1.4 terpasang; paket Podman terkait sudah dipasang ulang |
+| Rootful bridge | Gagal DNS dan TCP egress; network `podman` tercatat `dns_enabled=false` |
+| Jalur build | `--network=host` lolos tes; script mewajibkan VM sebelum build privileged |
+| VM build | Belum dibuat atau diuji; jalankan build hanya di VM NAT tanpa disk/folder host |
+| ISO/build/boot | Belum dibangun atau diuji |
+
+`--network=host` melewati bridge untuk build. Di VM, builder berbagi jaringan
+dan perangkat VM; jangan pass-through disk host atau share checkout asli.
 
 ## Kondisi repo
 
 | Item | Kondisi |
 |---|---|
 | Branch | `main` |
-| Working tree | bersih setelah commit terakhir |
-| Podman | **belum terpasang** di host |
-| QEMU | **belum terpasang** di host |
-| Disk kosong | 135 GB |
+| Working tree | (lihat kondisi terkini di atas) |
+| Podman | (lihat kondisi terkini di atas) |
+| QEMU | belum diverifikasi saat audit terakhir |
+| Disk kosong | belum diverifikasi saat audit terakhir |
 | ISO terbangun | **belum ada — belum pernah sekali pun** |
 
 ## Temuan audit (Prioritas A)
@@ -60,7 +74,7 @@ newline. Diganti `grep -c .`.
 | Profile networking (10 paket) & web-security (5 paket) | terdefinisi | satu sumber, dipakai build + runtime |
 | Generator package-list profile (build-time) | jalan | profile kosong → tanpa file; valid → 15 paket, duplikat dibuang; hilang/berbahaya → exit 1 |
 | Staging build (`image/` → `build/`) | jalan | `image/` berisi 7 file saat ini; seluruhnya disalin, executable bit utuh |
-| Preflight & pesan error `build.sh` | jalan | tanpa podman: exit 1 + pesan jelas. `--check` **belum pernah lolos** karena podman belum terpasang |
+| Preflight & pesan error `build.sh` | implementasi ada | `--check` hanya memeriksa prasyarat dasar; tidak memverifikasi build live |
 | Uji QEMU (`--test`) | terpasang di script | **belum pernah dijalankan** — belum ada ISO |
 
 ## Perubahan terakhir — utang teknis hook 0200 (2026-10-29)
@@ -231,9 +245,9 @@ sh   -n image/config/hooks/live/0100-oracle-identity.hook.chroot
 sh   -n image/config/includes.chroot/usr/local/bin/oracle
 ```
 
-`./scripts/build.sh --check` → **exit 1**, pesan: `podman belum terpasang`.
-Ini perilaku yang benar, bukan kegagalan tes. (Catatan lama "`--check` lolos"
-sudah tidak berlaku: podman belum terpasang di mesin ini.)
+Catatan historis: `./scripts/build.sh --check` pernah exit 1 saat Podman belum
+terpasang. Kondisi itu sudah berubah; jangan gunakan hasil lama sebagai status
+host terkini.
 
 ### Keterbatasan pengujian — baca sebelum mengklaim apa pun
 
@@ -365,7 +379,10 @@ Belum ditambahkan. Alasan:
   Dicatat sebagai kandidat bila nanti build sudah benar-benar berjalan dan
   log persisten dibutuhkan untuk diagnosis.
 
-## Blocker yang belum terselesaikan
+## Catatan historis — blocker sebelum setup host terbaru
+
+Daftar ini menggambarkan snapshot sebelum Podman dipasang dan dites pada
+2026-10-30. Jangan gunakan sebagai status terkini; lihat tabel di bagian atas.
 
 1. **Podman belum terpasang.** Butuh `sudo pacman -S podman` oleh pemilik mesin.
 2. **QEMU belum terpasang.** Butuh `sudo pacman -S qemu-base` sebelum uji boot.
@@ -415,5 +432,230 @@ ip addr                      # jaringan dasar
 
 1. `git log --oneline -3` — lihat posisi terakhir.
 2. Baca file ini.
-3. Jalankan `./tests/cli_test.sh` — kalau lulus, dasar CLI masih utuh.
+3. Jalankan `./tests/run_all.sh` — kalau lulus, dasar kode masih utuh.
 4. Lanjut ke blocker nomor 1: pasang podman, lalu build.
+
+## C + E — dokumentasi rootful & hardening mount (2026-10-30)
+
+### C — koreksi klaim rootless/rootful
+
+`ARCHITECTURE.md` §8, §14, dan `ROADMAP.md` masih menyebut build berjalan di
+container **rootless** dan "tidak butuh grup container istimewa". Itu
+bertentangan dengan `scripts/build.sh:37` (`PODMAN="sudo podman"`) dan dengan
+B-2/B-3 di dokumen ini. Klaim lama sudah dikoreksi menjadi **rootful**,
+lengkap dengan alasan teknis dan rujukan dokumentasi.
+
+Isi baru di `ARCHITECTURE.md`:
+
+- Alasan rootful: `live-build(7)` punya helper `lb chroot_proc`,
+  `lb chroot_sysfs`, `lb chroot_devpts` (memasang kernel filesystem);
+  `debootstrap(8)` memakai `chroot(2)` yang butuh `CAP_SYS_CHROOT`.
+- Pernyataan tegas bahwa `--privileged` **mematikan** batas capability,
+  pembatasan device, read-only kernel mount, dan confinement seccomp/AppArmor.
+  Container privileged **bukan** sandbox.
+- Bagian baru **"Blast radius of the build container"**: hanya `${ORACLE_ROOT}`
+  yang di-mount, propagation default `private`, semua tulisan `build.sh` hanya
+  ke `build/`, dan penegasan bahwa `:ro` **bukan** kontrol keamanan karena
+  `CAP_SYS_ADMIN` bisa `mount -o remount,rw`.
+- Tabel opsi privilege yang **belum diuji**, beserta trade-off masing-masing,
+  dan rekomendasi: pertahankan `--privileged` untuk build pertama, turunkan
+  setelah ada bukti.
+
+### E — hardening mount (diterapkan)
+
+Bind mount dipecah dua, di kedua tahap (`lb config` dan `lb build`):
+
+```diff
+-	-v "${ORACLE_ROOT}:/work:Z" \
++	-v "${ORACLE_ROOT}:/work:ro,Z" \
++	-v "${BUILD_DIR}:/work/build:rw,Z" \
+```
+
+`build/` dipasang **terpisah** karena submount tidak otomatis mewarisi `:ro`
+dari induknya. Tanpa mount kedua, live-build tidak bisa menulis.
+
+**Dasar penerapan (terverifikasi statis, bukan asumsi):** seluruh operasi
+tulis di `scripts/build.sh` sudah diperiksa satu per satu. Tidak ada satu pun
+yang menulis ke `image/`. `cp` hanya membaca dari `SOURCE_DIR`; `install`
+membaca `ORACLE_ROOT/config/*` dan menulis ke `INCLUDES` (di dalam `build/`);
+`chmod`/`find -exec chmod` hanya menyentuh `build/`. `gen-profile-list.sh`
+hanya menulis ke `$OUT`, yang berada di `build/`.
+
+**Batas yang diakui:** ini guardrail terhadap salah tulis, **bukan** kontrol
+keamanan. Di container `--privileged`, `CAP_SYS_ADMIN` cukup untuk
+`mount -o remount,rw`, sehingga `:ro` bisa dilewati oleh proses yang berniat
+jahat. Nilainya nyata tetapi terbatas: mencegah `cp`/`rm` yang salah arah
+merusak `image/`, dan membuat pelanggaran lapisan terlihat.
+
+**Yang TIDAK diubah:** `--privileged`, `--userns=host`, dan penggunaan
+`sudo podman` dibiarkan. Belum ada dasar terverifikasi bahwa varian
+capability yang lebih sempit cukup untuk `lb build`. Mengubahnya sekarang
+akan menukar risiko yang diketahui dengan kegagalan build yang belum
+dipahami. Kandidatnya tercatat di `ARCHITECTURE.md` §14.
+
+### Status verifikasi
+
+| Klaim | Status |
+|---|---|
+| `build.sh` tidak menulis ke `image/` | ✅ statis, semua baris diperiksa |
+| `build/` dipasang rw, repo ro | ✅ diterapkan di kedua tahap |
+| Sintaks `build.sh` | ✅ `bash -n` |
+| Suite tes | ✅ 151 assertion, 6/6 lulus |
+|| `:ro` benar-benar mencegah tulis saat `--privileged` | ❌ **belum** — dan menurut dokumentasi bisa dilewati |
+|| Varian privilege lebih sempit cukup untuk `lb build` | ❌ **belum diuji** |
+
+## Historis — kegagalan rootful Podman bridge (2026-10-30)
+
+Diagnosis awal dan restart service di bawah tidak menyelesaikan masalah bridge.
+Kesimpulan terkini dan workaround build ada pada bagian "Tindak lanjut — jalur
+jaringan build". Jangan memakai status `APPLIED` di catatan lama sebagai bukti
+bahwa bridge sudah sehat.
+
+### Diagnosis
+
+Container rootless (pasta backend) berhasil DNS & HTTP. Container rootful (bridge
+podman0) gagal DNS dan timeout pada `apt-get update`.
+
+**Audit read-only (dua diagnosa):**
+
+1. Network configuration di Podman metadata: lengkap
+   - Subnet: `10.88.0.0/16`
+   - Gateway: `10.88.0.1`
+   - Driver: bridge
+   - DNS enabled: false
+
+2. Aturan netavark di kernel: KOSONG
+   - nft table inet netavark: tidak ada entry NAT masquerade
+   - iptables nat POSTROUTING: kosong
+   - Interface podman0: TIDAK ADA (saat idle)
+
+3. Saat container berjalan:
+   - Interface podman0 muncul (10.88.0.1/16)
+   - Veth interface terhubung ke bridge
+   - Tetapi NAT rules tetap KOSONG
+   - Container: TCP ke gateway CLOSED, DNS FAIL
+
+4. Service status:
+   - systemctl is-active podman: **inactive**
+   - systemctl is-active podman-network: **inactive**
+
+### Hipotesis awal (tidak mengonfirmasi akar masalah)
+
+Catatan lama mengaitkan NAT yang hilang dengan status service Podman. Restart
+service tidak memperbaiki bridge; reinstall paket juga tidak mengubah hasil.
+Tes kemudian membuktikan host networking berfungsi, tetapi belum menemukan
+penyebab mengapa rootful bridge tidak memasang NAT rules.
+
+### Tindakan awal (tidak menyelesaikan masalah)
+
+```bash
+sudo systemctl restart podman
+```
+
+**Dampak:**
+- Podman daemon di-restart
+- Netavark rules akan di-generate ulang saat container pertama kali dijalankan
+- Container yang sedang berjalan dihentikan & dimulai ulang
+- UFW config tidak berubah
+- Kernel parameter tidak berubah
+
+**Reversibilitas:** Idempoten; jalankan ulang untuk reset atau `systemctl restart podman`
+
+### Verifikasi (PENDING)
+
+Status: `sudo systemctl restart podman` BERHASIL dijalankan.
+Podman status: `active` ✅
+
+Test DNS rootful: **BLOCKED** (biometric auth timeout pada sudo)
+- Perintah yang perlu dijalankan manual:
+  ```bash
+  sudo podman run --rm docker.io/library/debian:13 getent ahosts deb.debian.org
+  ```
+  Jika sukses → IP addresses ditampilkan
+  Jika gagal → "Temporary failure resolving" atau timeout
+
+Test rootless baseline: **OK** ✅
+- rootless DNS: `151.101.194.132 STREAM debian.map.fastlydns.net` (berhasil)
+
+**Session status (2026-10-30T05:30Z):**
+- Perbaikan applied: systemctl restart podman (status = active)
+- DNS verify rootful: BLOCKED (biometric auth timeout on sudo)
+- APT verify rootful: BLOCKED (biometric auth timeout on sudo)
+- Build start: BLOCKED (same biometric auth issue)
+
+**Instruksi lama di bawah bagian ini sudah ditarik:** jangan menambahkan aturan
+sudoers `NOPASSWD` untuk Podman/systemctl. Jalankan perintah admin secara
+interaktif dari terminal host bila memang diperlukan.
+
+### Tindak lanjut — jalur jaringan build (2026-10-30)
+
+Reinstall `podman`, `containers-common`, `netavark`, `aardvark-dns`, `conmon`,
+`catatonit`, dan `passt` tidak mengubah hasil bridge: network `podman` kosong,
+`dns_enabled=false`, DNS gagal (`exit 2`), dan TCP egress gagal (`exit 124`).
+Tes pada image Debian 13 yang sama berhasil dengan `--network=host` untuk DNS
+dan TCP (`HOSTNET_DNS=0 HOSTNET_TCP=0`).
+
+**Perbaikan build:** `scripts/build.sh` kini memakai host networking untuk
+`podman build` serta kedua container `lb config`/`lb build`. Ini melewati
+bridge/NAT yang gagal tanpa mengubah firewall host. Konsekuensinya, proses
+builder dapat menjangkau layanan lokal host; gunakan hanya dengan source dan
+builder yang dipercaya. Tidak ada ISO yang dibangun atau di-boot.
+
+## Historis — preflight sebelum Podman dipasang ulang (2026-10-30T08:00Z)
+
+Snapshot berikut dibuat sebelum reinstall dan sebelum tes `--network=host`.
+Status jaringan dan paket di dalamnya sudah kedaluwarsa.
+
+### Read-Only Verification (no sudo auth required)
+
+**Static prerequisites:**
+- Source files (image/auto/config, image/config/, image/Containerfile): ✅ ALL PRESENT
+- Build script (scripts/build.sh): ✅ READY & EXECUTABLE
+- Config identity: ✅ COMPLETE (ORACLE OS 0.1.0, Debian 13 trixie)
+- Test suite: ✅ 7/7 passing (175 assertions)
+- Disk space: ✅ SUFFICIENT (135GB available, need ~2GB)
+- IPv4 forwarding: ✅ ENABLED (required for rootful bridge)
+- DNS (rootless baseline): ✅ OK (151.101.194.132 resolves deb.debian.org)
+
+**Cannot verify (requires sudo auth — blocked by biometric timeout):**
+- Rootful Podman DNS access (test: `sudo podman run docker.io/library/debian:13 getent ahosts deb.debian.org`)
+- Registry pull capability (test: `sudo podman pull --dry-run docker.io/library/debian:13`)
+- Builder image build execution
+
+### Build Readiness Assessment
+
+**Ready to proceed:**
+✅ All static requirements satisfied
+✅ build.sh script complete & tested
+✅ live-build configuration present
+✅ Containerfile valid (guard + mount flags verified)
+✅ Repository tests all passing
+
+**Risk assessment:**
+- Builder image does not exist yet (will be created during build)
+- Network connectivity unverified for rootful (low risk — baseline DNS OK)
+- Biometric auth required for manual build execution
+
+### Next Steps for Phase 1 (M1 — First Boot)
+
+1. **Option A:** Manual build in terminal (you execute)
+   ```bash
+   cd ~/Projects/Oracle-OS
+   ./scripts/build.sh
+   ```
+   - Tap biometric when prompted
+   - Wait 30-60 minutes
+   - Report output (success / fail)
+
+2. **Option B:** Continue next session
+   - All preflight checks complete ✅
+   - Build script ready ✅
+   - Can start immediately when approved
+
+### Decision Required
+
+Build still requires a deliberate user start from the host terminal with normal
+interactive `sudo`. The real build and boot remain unverified.
+
+Current status: **READY, AWAITING APPROVAL**
+| Build ISO nyata | ❌ belum pernah dijalankan |
