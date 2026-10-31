@@ -33,7 +33,9 @@ From the repository root:
 git diff --check
 ```
 
-`--check` validates basic build prerequisites; it does not build an image and does not prove that Podman networking or `live-build` works end to end. The test suite includes static checks and mocked build-flow checks. A passing suite does not replace a real build or QEMU boot test.
+`--check` validates basic build prerequisites; it does not build an image and does not prove that Podman networking or `live-build` works end to end. The test suite includes static checks, desktop source checks, and mocked build-flow checks. A passing suite does not replace a real build or QEMU boot test.
+
+The planned graphical live variant uses XFCE 4 on X.Org with LightDM and `lightdm-gtk-greeter`. Its source package list is separate from the console core. The live-only LightDM configuration autologs the disposable `user` account into the `xfce` session. This is not an installer or persistent-system login policy.
 
 For shell syntax checks, run `bash -n` on Bash scripts and `sh -n` on scripts declared for POSIX `sh` (including `image/auto/config` and `scripts/gen-profile-list.sh`). Keep each script's interpreter consistent with its syntax.
 

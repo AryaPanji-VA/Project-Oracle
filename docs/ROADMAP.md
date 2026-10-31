@@ -93,12 +93,13 @@ Tasks:
 
 - [ ] Memahami cara kerja Debian Live dan `live-build`.
 - [x] Menentukan lingkungan build yang aman dan terpisah (VM Debian 13 disposable; NAT, tanpa disk/shared folder host; smoke test rootful Podman lulus).
-- [ ] Menyiapkan konfigurasi image minimal ORACLE OS.
-- [ ] Menentukan paket awal yang benar-benar diperlukan.
+- [x] Menyiapkan konfigurasi image minimal ORACLE OS (console core + source config XFCE/LightDM terpisah).
+- [x] Menentukan paket awal yang benar-benar diperlukan untuk varian console dan desktop.
 - [x] Menjalankan proses build image (berhasil di VM Debian 13 pada 2026-10-31).
 - [x] Memverifikasi file image dan hasil build (format ISO9660/hybrid, checksum cocok).
-- [ ] Menjalankan image menggunakan QEMU.
-- [ ] Mendokumentasikan hasil pengujian dan masalah yang ditemukan.
+- [x] Menjalankan image menggunakan QEMU (boot console tervalidasi; desktop belum dibuktikan pada ISO lama).
+- [ ] Membangun ulang dan memvalidasi varian XFCE + LightDM.
+- [ ] Mendokumentasikan hasil pengujian desktop dan masalah yang ditemukan.
 
 **Catatan build (2026-10-31):** ISO `build/live-image-amd64.hybrid.iso`
 berhasil dibuat dan checksum dicatat di `build/SHA256SUMS`. Format media telah

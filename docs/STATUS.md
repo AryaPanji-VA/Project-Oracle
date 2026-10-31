@@ -7,14 +7,15 @@
 
 | Item | Kondisi |
 |---|---|
-| Branch | `main`; `f200d08` sama dengan `origin/main` |
-| Working tree | `docs/STATUS.md` dan `docs/ROADMAP.md` memiliki perubahan lokal belum di-commit; `build/` diabaikan Git |
+| Branch | `main`; `adb0e57` sama dengan `origin/main` sebelum perubahan desktop lokal |
+| Working tree | Source XFCE + LightDM dan dokumentasi desktop memiliki perubahan lokal belum di-commit; `build/` diabaikan Git |
 | Podman host | 6.1.4 terpasang; paket Podman terkait sudah dipasang ulang |
 | Rootful bridge | Gagal DNS dan TCP egress; network `podman` tercatat `dns_enabled=false` |
 | Jalur build | QEMU Debian 13, Podman rootful, dan container `--network=host` lulus smoke test di VM NAT |
 | VM build | Debian 13 guest di `~/VMs/oracle-debian13/`; sudah dimatikan normal setelah build. QEMU memakai TCG karena `/dev/kvm` tidak tersedia di environment ini |
 | Build ISO | **Berhasil** di guest; `build/live-image-amd64.hybrid.iso` (786 MiB), checksum cocok |
-| Boot ISO ORACLE | **Belum diuji**; boot QEMU menunggu persetujuan terpisah |
+| Boot ISO ORACLE lama | **Tervalidasi console**; boot chain, live filesystem, graphical.target, dan tty1 tercapai |
+| Varian XFCE + LightDM | **Source diimplementasikan; belum dibuild atau diuji** |
 
 ## Persiapan Phase 1 — VM build (2026-10-30)
 
@@ -71,6 +72,16 @@
 
 `--network=host` melewati bridge untuk build. Di VM, builder berbagi jaringan
 dan perangkat VM; jangan pass-through disk host atau share checkout asli.
+
+## Desain desktop grafis (source-only, 2026-10-31)
+
+- Varian desktop memakai XFCE 4, X.Org, LightDM, dan `lightdm-gtk-greeter`.
+- Package list desktop terpisah di `image/config/package-lists/oracle-desktop.list.chroot`.
+- Live session diarahkan ke session `xfce` dengan autologin user disposable `user`.
+- Konfigurasi LightDM ditaruh di `image/config/includes.chroot/etc/lightdm/`.
+- Tidak dibuat symlink `display-manager.service` manual; mekanisme paket LightDM dan systemd harus diverifikasi saat build nyata.
+- Driver awal memakai `xserver-xorg-video-all`; QEMU graphical test direncanakan memakai `-vga std`, `-nic none`, dan tanpa disk.
+- Source sudah berubah, tetapi ISO lama tidak ditimpa dan belum memuat perubahan ini.
 
 ## Kondisi repo
 
@@ -454,8 +465,7 @@ Daftar ini menggambarkan snapshot sebelum Podman dipasang dan dites pada
 
 ## Utang teknis (bukan blocker)
 
-- Desktop environment, firewall default, dan hardening belum ditentukan
-  (ARCHITECTURE §5 dan §6 masih TBD).
+- Desktop environment sudah dipilih untuk varian graphical live (XFCE + LightDM); ukuran akhir, runtime dependency, dan hardening desktop belum diverifikasi sampai build nyata.
 - ARCHITECTURE §8 belum menyebut pemisahan profile build-time vs runtime
   secara eksplisit; perlu disesuaikan saat berikutnya menyentuh dokumen itu.
 - F-9 (`build/` bisa jadi milik root karena `--privileged` + `userns=host`)

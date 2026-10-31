@@ -1,0 +1,27 @@
+# ============================================================================
+# image/config/package-lists/oracle-desktop.list.chroot
+#
+# Desktop grafis ORACLE OS untuk live ISO.
+# Dipisahkan dari oracle-core supaya image console tetap bisa dipertahankan
+# sebagai varian minimal pada tahap berikutnya.
+#
+# Recommends APT dimatikan di image/auto/config, jadi komponen penting ditulis
+# eksplisit dan tidak bergantung pada dependency opsional.
+# ============================================================================
+
+# --- Desktop session --------------------------------------------------------
+xfce4
+
+# --- Display manager & greeter ---------------------------------------------
+lightdm
+lightdm-gtk-greeter
+
+# --- X.Org display/input stack ---------------------------------------------
+xserver-xorg-core
+xserver-xorg-input-all
+xserver-xorg-video-all
+
+# --- Session plumbing & policy ---------------------------------------------
+dbus-x11
+polkitd
+pkexec

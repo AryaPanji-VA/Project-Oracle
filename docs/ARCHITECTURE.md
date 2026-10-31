@@ -52,9 +52,21 @@ The initial release prioritizes:
 - CLI-based security tool management.
 - An ORACLE-specific command-line interface, introduced incrementally.
 
-A graphical environment remains optional. The desktop environment, display manager, and graphical customization are **TBD**.
+The first graphical variant is planned as an explicit live-image feature:
 
-Visual branding, including boot artwork, login appearance, and custom themes, will be developed after the underlying system becomes stable.
+- Desktop environment: XFCE 4.
+- Display stack: X.Org.
+- Display manager: LightDM.
+- Greeter: `lightdm-gtk-greeter`.
+- Session: `xfce`.
+- Live login: autologin as the disposable `user` account.
+
+This decision applies only to the planned graphical live ISO. It does not define
+an installer or persistent-system login policy. The current ISO remains the
+console-only artifact until a new build proves the graphical variant works.
+
+Visual branding, including boot artwork and custom themes, remains deferred until
+the desktop boot path is verified.
 
 ## 5. Security Tool Architecture
 
@@ -282,7 +294,7 @@ The following details remain intentionally unresolved until implementation requi
 
 - Core package list.
 - Tool profile names, packages, and dependencies.
-- Desktop environment and display manager.
+- Detailed desktop packages and graphical hardening defaults.
 - Detailed default firewall and hardening configuration.
 - ORACLE CLI command structure.
 - Graphical installer technology.
