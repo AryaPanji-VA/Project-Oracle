@@ -19,7 +19,7 @@ ok() { printf '  ok   %s\n' "$1"; pass=$((pass+1)); }
 no() { printf '  FAIL %s\n' "$1"; fail=$((fail+1)); }
 
 [ -f "$PKG" ] && ok "package-list desktop ada" || no "package-list desktop hilang"
-for p in xfce4 lightdm lightdm-gtk-greeter xserver-xorg-core \
+for p in xfce4 xfce4-terminal lightdm lightdm-gtk-greeter xserver-xorg-core \
          xserver-xorg-input-all xserver-xorg-video-all dbus-x11 polkitd pkexec; do
 	grep -qx "$p" "$PKG" 2>/dev/null \
 		&& ok "package desktop: $p" \

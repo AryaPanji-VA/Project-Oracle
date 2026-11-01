@@ -11,6 +11,7 @@
 
 # --- Desktop session --------------------------------------------------------
 xfce4
+xfce4-terminal
 
 # --- Display manager & greeter ---------------------------------------------
 lightdm
