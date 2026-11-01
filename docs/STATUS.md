@@ -1,21 +1,103 @@
 # ORACLE OS — Status
 
 > Living document. Perbarui setiap sesi kerja.
-> Terakhir diperbarui: 2026-10-31.
+> Terakhir diperbarui: 2026-11-01.
 
 ## Kondisi terkini
 
 | Item | Kondisi |
 |---|---|
-| Branch | `main`; `adb0e57` sama dengan `origin/main` sebelum perubahan desktop lokal |
-| Working tree | Source XFCE + LightDM dan dokumentasi desktop memiliki perubahan lokal belum di-commit; `build/` diabaikan Git |
+| Branch | `main`; sinkron dengan `origin/main` |
+| Working tree | Bersih setelah commit `20f77f1`; `build/` diabaikan Git |
 | Podman host | 6.1.4 terpasang; paket Podman terkait sudah dipasang ulang |
 | Rootful bridge | Gagal DNS dan TCP egress; network `podman` tercatat `dns_enabled=false` |
 | Jalur build | QEMU Debian 13, Podman rootful, dan container `--network=host` lulus smoke test di VM NAT |
-| VM build | Debian 13 guest di `~/VMs/oracle-debian13/`; sudah dimatikan normal setelah build. QEMU memakai TCG karena `/dev/kvm` tidak tersedia di environment ini |
-| Build ISO | **Berhasil** di guest; `build/live-image-amd64.hybrid.iso` (786 MiB), checksum cocok |
-| Boot ISO ORACLE lama | **Tervalidasi console**; boot chain, live filesystem, graphical.target, dan tty1 tercapai |
-| Varian XFCE + LightDM | **Source diimplementasikan; belum dibuild atau diuji** |
+| VM build | Debian 13 guest di `~/VMs/oracle-debian13/`; `/dev/kvm` tersedia pada sesi Phase 2 sehingga build memakai akselerasi KVM |
+| ISO console | `~/Projects/Oracle-OS/build/live-image-amd64.hybrid.iso`, 824,180,736 B, SHA-256 `7b11bc28…32d97f`; **tidak diubah** |
+| ISO graphical baseline | `~/VMs/oracle-debian13/ORACLE-OS-graphical.iso`, 950,009,856 B, SHA-256 `b76d429c…0be09`; tanpa `xfce4-terminal` |
+| ISO graphical phase 2 | `~/VMs/oracle-debian13/ORACLE-OS-graphical-phase2.iso`, 972,029,952 B, SHA-256 `6e0e744f…3cc9d4`; dengan `xfce4-terminal` |
+| Boot ISO ORACLE console | **Tervalidasi console**; boot chain, live filesystem, graphical.target, dan tty1 tercapai |
+| Varian XFCE + LightDM | **Dibangun dan diuji**; GRUB, autologin LightDM, session XFCE, keyboard, dan mouse tervalidasi di QEMU |
+
+## Phase 2 — Validasi graphical (2026-11-01)
+
+### Ringkasan build
+
+Dua ISO desktop dibangun di VM Debian 13 disposable dengan Podman rootful,
+`live-build 20250505+deb13u1`, dan source graphical yang sama.
+
+| ISO | Ukuran | SHA-256 | Isi |
+|---|---|---|---|
+| `ORACLE-OS-graphical.iso` (baseline) | 950,009,856 B | `b76d429cfbb5c3997c59412961610b2efc4d9aa89720cff59a6fba0b40c5be09` | XFCE + LightDM, tanpa `xfce4-terminal` |
+| `ORACLE-OS-graphical-phase2.iso` | 972,029,952 B | `6e0e744fe085fd9938effd6a6f1d84742fba6563b9f982c1368d716ccd3cc9d4` | ditambah `xfce4-terminal` |
+| `build/live-image-amd64.hybrid.iso` (console) | 824,180,736 B | `7b11bc284aa5997299c1c45015a6c006b203dff029942be2488fb0f97932d97f` | varian console, tidak berubah |
+
+Ketiga checksum diverifikasi ulang di host setelah seluruh pengujian.
+
+### Perubahan source phase 2
+
+- `image/config/package-lists/oracle-desktop.list.chroot`: menambah
+  `xfce4-terminal`. Paket `xfce4` hanya *Recommends*-nya, dan
+  `--apt-recommends false` mematikan recommends, sehingga terminal tidak ikut
+  terpasang pada build sebelumnya.
+- `tests/desktop_config_test.sh`: assertion `xfce4-terminal` ditambahkan.
+- Ketersediaan paket diperiksa lebih dulu di APT guest:
+  `xfce4-terminal 1.1.4-1` memang ada di `trixie/main`, bukan diasumsikan.
+
+### Hasil pengujian QEMU (ISO phase 2)
+
+VM disposable, `-vga std`, `-nic none`, tanpa disk host, tanpa USB passthrough,
+tanpa instalasi.
+
+| Tahap | Bukti | Status |
+|---|---|---|
+| GRUB | menu Debian Live, build timestamp 2026-11-01 | lulus |
+| Kernel / initramfs | desktop tercapai setelah Enter pada menu | lulus |
+| LightDM autologin | langsung masuk sebagai `user` tanpa greeter prompt | lulus |
+| Session XFCE | panel atas, dock bawah, ikon Home/File System | lulus |
+| `Ctrl+Alt+T` | terminal terbuka langsung, prompt `user@oracle:~$` | lulus |
+| Keyboard | karakter dan Enter diterima shell di dalam terminal | lulus |
+| Mouse klik | menu konteks xfdesktop terbuka pada posisi klik | lulus |
+| Mouse gerak + double-click | ikon `Home` terseleksi, lalu Thunar terbuka di `/home/user/` | lulus |
+
+`display-manager.service` pada image mengarah ke
+`/lib/systemd/system/lightdm.service`, dan `lightdm`, `lightdm-gtk-greeter`,
+`xfce4`, `xfce4-terminal`, `xserver-xorg-core`, `dbus-x11`, `polkitd`, `pkexec`
+tercatat `install ok installed` di database paket image.
+
+### Temuan input QEMU 11.1.2
+
+Pointer aktif pada guest graphical adalah `vmmouse` dengan mode **absolute**
+(`query-mice` melaporkan `{"name":"vmmouse","current":true,"absolute":true}`).
+Akibatnya event `rel` pada `input-send-event` **diterima tanpa error tetapi
+tidak menggerakkan kursor**. Metode yang bekerja:
+
+1. Inspect `query-qmp-schema`, bukan menebak. `input-send-event` memakai
+   `arg-type` "145" berisi `device`, `head`, dan `events`; tipe event "428"
+   punya varian `key`, `btn`, `rel`, `abs`, `mtt`.
+2. Kirim sumbu `abs` dengan skala 0–32767
+   (contoh: `x = px / 1280 * 32767`, `y = py / 800 * 32767`).
+3. Klik lewat `btn` (`left`, `right`, dst.) dengan pasangan `down: true` lalu
+   `down: false`.
+4. Double-click berhasil dengan jeda antar klik ~0.12 s; jeda 0.4 s hanya
+   menghasilkan seleksi tunggal.
+5. HMP tidak punya `mouse_*` maupun `input-send-event`; jalur interaktif harus
+   memakai socket QMP terpisah (`-qmp unix:…`).
+
+Catatan operasional: `system_powerdown` tidak direspons pada live session XFCE,
+sehingga penghentian memakai `quit` lewat monitor HMP. Filesystem live
+bersifat read-only sehingga tidak ada risiko kehilangan data.
+
+### Keterbatasan yang diakui
+
+- LightDM/greeter tidak tertangkap dalam frame screendump karena autologin
+  berjalan instan; keberadaannya diverifikasi dari konfigurasi dan symlink
+  unit systemd di dalam image, bukan dari tangkapan layar greeter.
+- Stabilitas sesi jangka panjang, audio, jaringan guest, dan pengujian pada
+  hardware fisik belum diuji.
+
+## Riwayat lama (dipertahankan sebagai jejak)
+
 
 ## Persiapan Phase 1 — VM build (2026-10-30)
 
@@ -48,51 +130,57 @@
   image builder `oracle-builder:13`, dan `live-build 20250505+deb13u1`.
 - ISO tersimpan di `build/live-image-amd64.hybrid.iso` (786 MiB; 402432 sektor).
   Identifikasi file menunjukkan ISO9660 bootable dengan label `ORACLE` dan
-  boot sector DOS/MBR. Ini memeriksa format media; **belum membuktikan OS boot**.
+  boot sector DOS/MBR. Format media, checksum, dan boot console kemudian
+  tervalidasi, sehingga milestone First Boot (console) tercapai.
 - SHA-256 diverifikasi di guest dan setelah disalin ke host:
   `fd52ab755d2ad10e5a24f830a292bfd17010447f327bfb7b5364cb4c94142467`.
   Checksum tersimpan di `build/SHA256SUMS`.
 - Root filesystem squashfs: 648 MiB terkompresi, 49.21% dari ukuran asal
   (sekitar 1.29 GiB); 22,222 inode. Build menarik beragam paket firmware Debian,
   termasuk firmware grafis dan jaringan; ukuran/seleksi firmware perlu ditinjau.
-- Tidak ada boot ISO ORACLE, akses disk host, USB, atau instalasi yang dilakukan.
-  Tahap selanjutnya adalah inspeksi isi ISO dan boot uji QEMU setelah disetujui.
+- ISO ini kemudian di-boot di QEMU dan mencapai console (lihat tabel kondisi
+  terkini). Tidak ada akses disk host, USB, atau instalasi yang dilakukan.
 
-## Verifikasi dokumentasi dan repo (2026-10-30)
+## Verifikasi dokumentasi dan repo (2026-10-30; diperbarui 2026-11-01)
 
 - Spesifikasi proyek ditulis di `docs/SPECIFICATION.md` dan workflow di
   `docs/DEVELOPMENT.md`; daftar identitas, konfigurasi image, paket inti,
   profile, dan direktori sumber telah dicocokkan dengan repo.
 - Pemeriksaan sintaks shell lulus untuk skrip Bash dan skrip POSIX shell.
-- `./tests/run_all.sh --quiet`: **7/7 test, 180 assertion lulus**.
+- `./tests/run_all.sh --quiet`: **8/8 test, 199 assertion lulus** (per 2026-11-01,
+  naik dari 7/7 dan 180 pada 2026-10-30 setelah test desktop ditambahkan).
 - `git diff --check` lulus.
-- Tidak dijalankan build ISO ORACLE maupun boot image ORACLE; hasil test
-  otomatis memakai mock untuk alur Podman/live-build. Boot Debian di QEMU
-  hanya untuk menyiapkan dan menguji VM build.
+- Test otomatis memakai mock untuk alur Podman/live-build. Boot Debian di QEMU
+  dipakai menyiapkan VM build; build ISO ORACLE nyata dan boot image ORACLE
+  (console dan graphical) sudah dijalankan — lihat bagian Phase 2.
 
 `--network=host` melewati bridge untuk build. Di VM, builder berbagi jaringan
 dan perangkat VM; jangan pass-through disk host atau share checkout asli.
 
-## Desain desktop grafis (source-only, 2026-10-31)
+## Desain desktop grafis (2026-10-31; diverifikasi 2026-11-01)
 
 - Varian desktop memakai XFCE 4, X.Org, LightDM, dan `lightdm-gtk-greeter`.
 - Package list desktop terpisah di `image/config/package-lists/oracle-desktop.list.chroot`.
 - Live session diarahkan ke session `xfce` dengan autologin user disposable `user`.
 - Konfigurasi LightDM ditaruh di `image/config/includes.chroot/etc/lightdm/`.
-- Tidak dibuat symlink `display-manager.service` manual; mekanisme paket LightDM dan systemd harus diverifikasi saat build nyata.
-- Driver awal memakai `xserver-xorg-video-all`; QEMU graphical test direncanakan memakai `-vga std`, `-nic none`, dan tanpa disk.
-- Source sudah berubah, tetapi ISO lama tidak ditimpa dan belum memuat perubahan ini.
+- Tidak dibuat symlink `display-manager.service` manual. **Terverifikasi saat build:**
+  paket LightDM sendiri yang membuat symlink ke `/lib/systemd/system/lightdm.service`.
+- Driver memakai `xserver-xorg-video-all`; pengujian QEMU memakai `-vga std`,
+  `-nic none`, dan tanpa disk.
+- `xfce4-terminal` sekarang ikut terpasang, sehingga `Ctrl+Alt+T` langsung
+  membuka terminal. Pada ISO baseline tanpa paket itu, shortcut memunculkan
+  dialog "Choose Preferred Application".
 
 ## Kondisi repo
 
 | Item | Kondisi |
 |---|---|
 | Branch | `main` |
-| Working tree | (lihat kondisi terkini di atas) |
+| Working tree | Bersih; hanya dokumentasi yang berubah bila ada sesi berjalan |
 | Podman | (lihat kondisi terkini di atas) |
-| QEMU | 11.1.2 terpasang; Debian cloud guest dipakai untuk build Phase 1 |
-| Disk host kosong | 134 GiB tersedia pada audit ini; disk guest virtual 50 GiB |
-| ISO terbangun | `build/live-image-amd64.hybrid.iso`, 786 MiB; SHA-256 tercatat di atas |
+| QEMU | 11.1.2; KVM tersedia pada sesi Phase 2; grafik diuji dengan `-vga std` |
+| Disk host kosong | 112 GiB tersedia saat Phase 2; disk guest virtual 50 GiB |
+| ISO terbangun | tiga ISO: console `7b11bc28…`, graphical baseline `b76d429c…`, graphical phase 2 `6e0e744f…`; semuanya tercatat di table Phase 2 |
 
 ## Temuan audit (Prioritas A)
 
@@ -140,7 +228,7 @@ newline. Diganti `grep -c .`.
 | Generator package-list profile (build-time) | jalan | profile kosong → tanpa file; valid → 15 paket, duplikat dibuang; hilang/berbahaya → exit 1 |
 | Staging build (`image/` → `build/`) | jalan | `image/` berisi 7 file saat ini; seluruhnya disalin, executable bit utuh |
 | Preflight & pesan error `build.sh` | implementasi ada | `--check` hanya memeriksa prasyarat dasar; tidak memverifikasi build live |
-| Uji QEMU (`--test`) | terpasang di script | **belum pernah dijalankan** — belum ada ISO |
+| Uji QEMU (`--test`) | terpasang di script | boot QEMU manual dengan `-cdrom` + monitor socket sudah tervalidasi pada ISO console dan graphical |
 
 ## Perubahan terakhir — utang teknis hook 0200 (2026-10-29)
 
@@ -301,6 +389,9 @@ Satu perintah menjalankan semuanya:
 | `tests/build_order_test.sh` | 36 lulus, 0 gagal |
 | **Total (hasil audit ulang 2026-10-30)** | **180 assertion, 7/7 tes lulus** |
 
+> Snapshot ini dari 2026-10-30. Hasil terkini (2026-11-01): **199 assertion,
+> 8/8 tes lulus**, setelah `tests/desktop_config_test.sh` ditambahkan.
+
 Validasi sintaks:
 
 ```
@@ -337,8 +428,8 @@ Batas tegas antara **tiruan** dan **live-build asli**:
 3. **Pada audit saat itu Podman belum dijalankan.** Build nyata kemudian
    berjalan di container builder rootful di guest.
 4. **`apt-get` selalu palsu.** Tidak ada paket dipasang di host.
-5. **ISO belum di-boot.** Build berhasil, tetapi perilaku runtime image belum
-   terverifikasi sampai uji QEMU dilakukan.
+5. **ISO pada audit itu belum di-boot.** Sejak 2026-11-01, boot QEMU console dan
+   graphical sudah dilakukan; hasilnya di bagian Phase 2.
 
 ### Verifikasi bahwa tes benar-benar bisa gagal
 

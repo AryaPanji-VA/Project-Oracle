@@ -97,13 +97,20 @@ Tasks:
 - [x] Menentukan paket awal yang benar-benar diperlukan untuk varian console dan desktop.
 - [x] Menjalankan proses build image (berhasil di VM Debian 13 pada 2026-10-31).
 - [x] Memverifikasi file image dan hasil build (format ISO9660/hybrid, checksum cocok).
-- [x] Menjalankan image menggunakan QEMU (boot console tervalidasi; desktop belum dibuktikan pada ISO lama).
-- [ ] Membangun ulang dan memvalidasi varian XFCE + LightDM.
-- [ ] Mendokumentasikan hasil pengujian desktop dan masalah yang ditemukan.
+- [x] Menjalankan image menggunakan QEMU (boot console tervalidasi; ISO desktop lama belum di-boot).
+- [x] Membangun ulang dan memvalidasi varian XFCE + LightDM (2026-11-01; ISO graphical phase 2 terbentuk dan di-boot: GRUB, autologin LightDM, session XFCE, keyboard, dan input mouse via QMP semuanya tervalidasi).
+- [x] Mendokumentasikan hasil pengujian desktop dan masalah yang ditemukan (lihat `docs/STATUS.md` bagian Phase 2).
 
 **Catatan build (2026-10-31):** ISO `build/live-image-amd64.hybrid.iso`
-berhasil dibuat dan checksum dicatat di `build/SHA256SUMS`. Format media telah
-diperiksa, tetapi ISO belum di-boot; milestone First Boot tetap belum tercapai.
+berhasil dibuat dan checksum dicatat di `build/SHA256SUMS`. Format media,
+checksum, dan boot console tervalidasi, sehingga milestone First Boot (console)
+tercapai.
+
+**Catatan build graphical (2026-11-01):** dua ISO desktop dibangun di VM
+Debian 13 disposable. Baseline `b76d429c…0be09` (tanpa `xfce4-terminal`)
+dan refinement `6e0e744f…3cc9d4` (dengan `xfce4-terminal`) sudah di-boot di
+QEMU dan mencapai desktop XFCE. **Milestone First Boot graphical tercapai.**
+Rincian bukti ada di `docs/STATUS.md`.
 
 Deliverables:
 
@@ -119,7 +126,7 @@ Deliverables:
 - Sistem mencapai lingkungan yang diharapkan tanpa kegagalan kritis.
 - Proses build dan pengujian dapat diulang mengikuti dokumentasi.
 
-**Milestone:** ORACLE OS berhasil melakukan boot pertama.
+**Milestone:** ORACLE OS berhasil melakukan boot pertama (console dan graphical).
 
 ### Phase 2 — Core Identity & System
 
