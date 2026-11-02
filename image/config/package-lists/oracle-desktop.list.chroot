@@ -26,3 +26,32 @@ xserver-xorg-video-all
 dbus-x11
 polkitd
 pkexec
+
+# --- ORACLE design assets: tema, ikon, font, kursor -------------------------
+# Referensi: docs/design/INTEGRATION-READINESS.md section 2.
+# Semua paket di bawah diperlukan agar aset di includes.chroot/ benar-benar
+# tampil. Recommends APT dimatikan, jadi setiap dependency opsional ditulis
+# eksplisit di sini.
+
+# Basis tema GTK. gtk.css ORACLE adalah turunan Arc; tanpa paket ini aplikasi
+# GTK2 tidak punya engine yang cocok, dan tidak ada fallback tema.
+arc-theme
+
+# Tema ikon. ORACLE-Papirus index.theme berisi Inherits=Papirus,hicolor;
+# tanpa paket ini ikon di luar subset jatuh ke hicolor dan tampil generik.
+papirus-icon-theme
+hicolor-icon-theme
+
+# Render SVG untuk ikon Papirus. Ini hanya Recommends milik papirus-icon-theme,
+# sehingga TIDAK ikut terpasang saat --apt-recommends false. Tanpa paket ini
+# ikon SVG tidak dirender dan panel/file manager tampil tanpa ikon.
+librsvg2-common
+
+# Font. xsettings memakai FontName=Inter 11 dan terminal memakai
+# FontName=JetBrains Mono 11. Tanpa paket ini keduanya jatuh ke font default
+# dan metrik kolom terminal berubah.
+fonts-inter
+fonts-jetbrains-mono
+
+# Kursor. lightdm-gtk-greeter.conf memakai cursor-theme-name=dmz-cursor-theme.
+dmz-cursor-theme
