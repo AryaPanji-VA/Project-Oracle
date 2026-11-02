@@ -1,14 +1,19 @@
 # ORACLE-OS — Aset Brand Tahap 1 (Dial, Wordmark, Lockup)
 
-> **Status:** Selesai, menunggu review Arya.
-> **Lokasi:** `~/Projects/oracle-brand-assets/` — **di luar** source sistem
-> ORACLE (repo `~/Projects/Oracle-OS` tidak tersentuh).
+> **Status:** Selesai dan **sudah digabungkan** ke repo utama pada Stage 3A.
+> **Lokasi runtime:** `image/config/includes.chroot/usr/share/oracle/branding/`
+> — lihat `ASSET-DOCUMENTATION.md` §1.
+> **Sumber/arsip:** design repository `oracle-brand-assets`, tetap dipertahankan.
 > **Tanggal:** 2026-11-02 · **Identitas:** Knowledge · Timeless · Retro Industrial · Light-first.
+>
+> Dokumen ini menjelaskan **geometri** aset brand. Untuk keputusan desain yang
+> berlaku, lihat `MASTER-DESIGN.md`. Untuk inventaris & status, lihat
+> `ASSET-DOCUMENTATION.md`.
 >
 > Semua angka di dokumen ini **terukur**, bukan diperkirakan. Asal angka:
 > pengukuran piksel dari brand guide yang disepakati (Sesi desain) dan
 > pembacaan atribut secara langsung dari berkas SVG, serta penghitungan kontras
-> WCAG dari nilai hex. Metode lengkap ada di `tools/audit_assets.py`.
+> WCAG dari nilai hex. Metode lengkap ada di `tools/design/audit_assets.py`.
 
 ---
 
@@ -204,7 +209,9 @@ dipasang ke host.**
 
 ## 9. Yang belum dikerjakan (di luar Tahap 1)
 
-- Wallpaper (Workspace & Minimal) — **Tahap 2**.
-- Tema GTK3 (basis Arc, dimodifikasi minimal) — **Tahap 3**.
-- Konfigurasi panel, greeter, terminal — **Tahap 4**.
-- Aset ini **belum** digabungkan ke repo ORACLE (`~/Projects/Oracle-OS`).
+- Wallpaper (Workspace & Minimal) — **selesai**, Stage 2.
+- Tema GTK3 (basis Arc, dimodifikasi minimal) — **selesai**, Stage 2C.
+- Konfigurasi panel, greeter, terminal — **selesai sebagai aset**, Stage 2D–2F.
+  Aktivasi runtime belum dilakukan.
+- Aset ini **sudah** digabungkan ke repo ORACLE pada Stage 3A
+  (`468e3e6`). Lihat `ASSET-DOCUMENTATION.md` untuk path runtime.
