@@ -1,0 +1,17 @@
+[Icon Theme]
+Name=ORACLE-Papirus
+Comment=ORACLE OS icon theme - Papirus with limited accent recolor
+Inherits=Papirus,hicolor
+Example=folder
+FollowsColorScheme=true
+
+DesktopDefault=48
+DesktopSizes=16,22,24,32,48,64
+ToolbarDefault=22
+ToolbarSizes=16,22,24,32,48
+MainToolbarDefault=22
+MainToolbarSizes=16,22,24,32,48
+SmallToolbarDefault=16
+SmallToolbarSizes=16,22,24
+PanelDefault=22
+PanelSizes=16,22,24,32,48

@@ -1,0 +1,90 @@
+ORACLE-OS — Audit Aset Tahap 1
+================================================================================
+
+0. INVENTARIS — 10 berkas SVG
+--------------------------------------------------------------------------------
+berkas                                             viewBox   bytes
+svg/dial-master.svg                        476.0x501.0         421
+svg/dial-optical-16.svg                    476.0x511.4         475
+svg/lockup-horizontal.svg                 2321.2x501.0        1742
+svg/wordmark.svg                           828.0x119.0        1570
+svg/variants/dial-dark.svg                 476.0x501.0         439
+svg/variants/dial-light.svg                476.0x501.0         441
+svg/variants/dial-mono.svg                 476.0x501.0         439
+svg/variants/lockup-dark.svg              2321.2x501.0        1760
+svg/variants/lockup-light.svg             2321.2x501.0        1762
+svg/variants/lockup-mono.svg              2321.2x501.0        1760
+  (tidak ada <image> / data URI: seluruh aset murni vektor)
+
+1. GEOMETRI DIBACA DARI BERKAS (eksak, bukan dari raster)
+--------------------------------------------------------------------------------
+berkas                               Ø  stroke    s/Ø    slot  slot/Ø  tick_w  tick_h    h/Ø
+dial-master.svg                 460.00   57.50 0.1250   80.00  0.1739   50.00  180.00 0.3913
+dial-optical-16.svg             460.00   57.50 0.1250  128.80  0.2800   52.90  188.60 0.4100
+
+                                stroke/Ø    slot/Ø   tick_w/Ø   tick_h/Ø
+target master                     0.1250    0.1739     0.1087     0.3913
+hasil  master                     0.1250    0.1739     0.1087     0.3913
+target optical16                  0.1250    0.2800     0.1150     0.4100
+hasil  optical16                  0.1250    0.2800     0.1150     0.4100
+
+  slot optical / slot master = 1.61x   <- 'tick gap lebih lebar' yang diminta
+  tick_w optical / tick_w master = 1.06x
+  celah kiri-kanan di dalam slot, optical: 0.0825 x Ø per sisi
+
+2. UJI 16 px SEBENARNYA — apakah tick terbaca TERPISAH dan SIMETRIS
+--------------------------------------------------------------------------------
+  Ini kriteria objektif untuk varian optical: pada 16 px, celah kiri dan
+  kanan tick harus sama. Kalau tidak, tick tampak 'menempel' ke satu sisi.
+
+varian             Ø        celah (kiri,kanan)    simetris
+master            17       (2,1), (3,2), (4,3)       TIDAK
+optical16         17              (2,2), (3,3)          YA
+
+  Bukti visual 16 px (master / optical):
+    .......###.......   .......###.......
+    .....#######.....   .......###.......
+    ...###########...   ...###.######....
+    ..#############..   ..############...
+    .####..###.####..   .#####.########..
+    .###...###..####.   .####..###..####.
+    ###....###...###.   ####...###...###.
+    ###...........###   ###..........###.
+    ###...........###   ###...........###
+    ###...........###   ###...........###
+    ###...........###   ###...........###
+    ###..........###.   ###..........###.
+    ####.........###.   ####.........###.
+    .####.......####.   .####.......####.
+    ..#####...#####..   .#####.....####..
+    ...###########...   ..############...
+    ....#########....   ...##########....
+    .......###.......   .....######......
+
+3. VARIAN WARNA
+--------------------------------------------------------------------------------
+  dial-light    2 warna   #344653 #8C7B58
+  lockup-light  2 warna   #344653 #8C7B58
+  dial-dark     2 warna   #B8A98D #F5F3EC
+  lockup-dark   2 warna   #B8A98D #F5F3EC
+  dial-mono     1 warna   #30363B
+  lockup-mono   1 warna   #30363B
+
+4. KONTRAS TERHADAP LATAR TUJUAN (ambang grafis 3:1)
+--------------------------------------------------------------------------------
+  light  ring #344653 pada #F5F3EC        8.81:1  PASS
+  light  tick #8C7B58 pada #F5F3EC        3.72:1  PASS
+  dark   ring #F5F3EC pada #344653        8.81:1  PASS
+  dark   tick #B8A98D pada #344653        4.24:1  PASS
+  mono   #30363B pada #F5F3EC            11.02:1  PASS
+  opt16  ring #30363B pada #F5F3EC       11.02:1  PASS
+  opt16  tick #8C7B58 pada #F5F3EC        3.72:1  PASS
+  DITOLAK: Brass #B8A98D pada #F5F3EC     2.08:1  FAIL (dicatat)
+
+5. BATAS AUDIT INI
+--------------------------------------------------------------------------------
+  - Tidak ada rendering di dalam XFCE/QEMU. Kecocokan bentuk diukur
+    dari raster rsvg, bukan dari tangkapan layar sesi nyata.
+  - IoU terhadap acuan terbatas oleh resolusi preview (16 px di preview
+    adalah 25 px diameter). Angka 16/24/32/48 adalah ukuran RENDER.
+  - Kontras dihitung dari nilai hex, bukan diukur dari layar.

@@ -1,0 +1,190 @@
+/* ==========================================================================
+   ORACLE-OS — LightDM GTK Greeter styling
+   Target: lightdm-gtk-greeter 2.0.9-1, GTK 3
+
+   CARA PAKAI: sertakan berkas ini di dalam tema GTK ORACLE, mis.
+   @import url("oracle-greeter.css");
+   di akhir gtk-3.0/gtk.css. Greeter memakai tema yang sama (theme-name=ORACLE),
+   jadi aturan ini hanya aktif saat greeter berjalan.
+
+   Hanya id yang terverifikasi ada di binary 2.0.9. Id dari sample CSS 1.8
+   (#content_frame, #buttonbox_frame, #shutdown_button, #restart_button,
+   #shutdown_dialog, #restart_dialog) TIDAK dipakai -- tidak ada di 2.0.9.
+   ========================================================================== */
+
+/* --- panel atas ---------------------------------------------------------- */
+#panel_window {
+    background-color: #344653;
+    color: #F5F3EC;
+    border-style: none;
+    box-shadow: none;
+}
+
+#panel_window .menubar,
+#panel_window .menubar > .menuitem {
+    background-color: transparent;
+    color: #F5F3EC;
+    text-shadow: none;
+    -gtk-icon-shadow: none;
+}
+
+#panel_window .menubar .menuitem:disabled {
+    color: #8A9AA2;
+}
+
+#panel_window .menubar .menu {
+    background-color: #F5F3EC;
+    border: 1px solid #B9C1C2;
+    border-radius: 3px;
+}
+
+#panel_window .menubar .menu .menuitem {
+    color: #30363B;
+    text-shadow: none;
+}
+
+#panel_window .menubar .menu .menuitem:hover {
+    background-color: #344653;
+    color: #F5F3EC;
+}
+
+/* --- jendela login ------------------------------------------------------- */
+#login_window {
+    background-color: #F5F3EC;
+    color: #30363B;
+    border: 1px solid #B9C1C2;
+    border-radius: 4px;
+    box-shadow: none;
+}
+
+/* --- pemilih user -------------------------------------------------------- */
+#user_combobox {
+    color: #30363B;
+    font-size: 15px;
+}
+
+/* ComboBoxText di GTK3 terdiri dari button + label. Tanpa aturan ini,
+   tombolnya mewarisi gaya gelap dari tema induk dan teks tidak terbaca. */
+#user_combobox button,
+#user_combobox .button {
+    background-color: #F5F3EC;
+    background-image: none;
+    color: #30363B;
+    border: 1px solid #B9C1C2;
+    border-radius: 3px;
+    box-shadow: none;
+    text-shadow: none;
+}
+
+#user_combobox button:hover,
+#user_combobox .button:hover {
+    background-color: #E9E5DA;
+}
+
+#user_combobox label {
+    color: #30363B;
+}
+
+#user_combobox .menu {
+    background-color: #F5F3EC;
+    border: 1px solid #B9C1C2;
+}
+
+#user_combobox .arrow {
+    color: #667D89;
+}
+
+/* --- foto user ----------------------------------------------------------- */
+#user_image {
+    border-radius: 4px;
+}
+
+#user_image_border {
+    border: 1px solid #B9C1C2;
+    border-radius: 4px;
+}
+
+/* --- entry password ------------------------------------------------------ */
+#login_window .entry {
+    background-color: #E9E5DA;
+    color: #30363B;
+    border: 1px solid #B9C1C2;
+    border-radius: 3px;
+    caret-color: #344653;
+}
+
+#login_window .entry:focus {
+    border-color: #667D89;
+    box-shadow: inset 0 0 0 1px #667D89;
+}
+
+/* --- tombol -------------------------------------------------------------- */
+#login_button {
+    background-color: #344653;
+    color: #F5F3EC;
+    border: 1px solid #344653;
+    border-radius: 3px;
+    font-weight: bold;
+}
+
+#login_button:hover {
+    background-color: #4B5B65;
+    border-color: #4B5B65;
+}
+
+#login_button:active {
+    background-color: #5E6C75;
+    border-color: #5E6C75;
+}
+
+#login_button:disabled {
+    background-color: #B9C1C2;
+    color: #4E6069;
+    border-color: #B9C1C2;
+}
+
+#cancel_button {
+    background-color: #F5F3EC;
+    background-image: none;
+    color: #30363B;
+    border: 1px solid #B9C1C2;
+    border-radius: 3px;
+}
+
+#cancel_button label {
+    color: #30363B;
+}
+
+#cancel_button:hover {
+    background-color: #E9E5DA;
+    color: #30363B;
+}
+
+/* --- infobar (pesan error / info) ---------------------------------------- */
+/* InfoBar GTK3 punya latar dari message-type. Tanpa override, latarnya
+   gelap dan teks Graphite tidak terbaca (terbukti di preview: kontras
+   gagal). Latar dipaksa Porcelain, teks Graphite, dan aksen error memakai
+   merah semantik yang sama dengan terminal (#B4503C). */
+#greeter_infobar {
+    background-color: #F5F3EC;
+    background-image: none;
+    color: #30363B;
+    border: 1px solid #B9C1C2;
+    border-left: 3px solid #B4503C;
+    border-radius: 3px;
+}
+
+#greeter_infobar label {
+    color: #30363B;
+}
+
+#greeter_infobar box,
+#greeter_infobar revealer {
+    background-color: transparent;
+}
+
+/* --- style class greeter (fallback bila id tidak berlaku) ---------------- */
+.lightdm-gtk-greeter {
+    background-color: #E9E5DA;
+    color: #30363B;
+}

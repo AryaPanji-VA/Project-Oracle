@@ -1,0 +1,31 @@
+# ORACLE-OS — potongan terminalrc (xfce4-terminal 1.1.4-1)
+# Salin key ini ke ~/.config/xfce4/terminal/terminalrc, atau ke
+# /etc/xdg/xfce4/terminal/terminalrc untuk default sistem.
+# JANGAN menimpa seluruh file: terminalrc berisi key lain milik user.
+
+[Configuration]
+ColorForeground=#30363B
+ColorBackground=#F5F3EC
+ColorCursor=#344653
+ColorCursorForeground=#F5F3EC
+ColorCursorUseDefault=FALSE
+ColorSelection=#344653
+ColorSelectionBackground=#344653
+ColorSelectionUseDefault=FALSE
+ColorBold=#30363B
+ColorBoldUseDefault=FALSE
+ColorBoldIsBright=FALSE
+ColorUseTheme=FALSE
+ColorBackgroundVary=FALSE
+TabActivityColor=#8C7B58
+ColorPalette=#30363B;#B4503C;#317E2A;#8A682E;#3674A1;#B83D99;#2B7682;#667D89;#B9C1C2;#C33D22;#26801E;#90661E;#1F72AE;#C8239F;#1B7987;#E9E5DA
+FontName=JetBrains Mono 11
+FontUseSystem=FALSE
+FontAllowBold=TRUE
+MiscCursorShape=TERMINAL_CURSOR_SHAPE_BLOCK
+MiscCursorBlinks=FALSE
+MiscAlwaysShowTabs=FALSE
+MiscBell=FALSE
+ScrollingUnlimited=TRUE
+ScrollingBar=TERMINAL_SCROLLBAR_NONE
+BackgroundMode=TERMINAL_BACKGROUND_SOLID
