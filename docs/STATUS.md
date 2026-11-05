@@ -1,7 +1,7 @@
 # ORACLE OS — Status
 
 > Living document. Perbarui setiap sesi kerja.
-> Terakhir diperbarui: 2026-11-01.
+> Terakhir diperbarui: 2026-11-05 (Stage 3G).
 
 ## Kondisi terkini
 
@@ -18,6 +18,129 @@
 | ISO graphical phase 2 | `~/VMs/oracle-debian13/ORACLE-OS-graphical-phase2.iso`, 972,029,952 B, SHA-256 `6e0e744f…3cc9d4`; dengan `xfce4-terminal` |
 | Boot ISO ORACLE console | **Tervalidasi console**; boot chain, live filesystem, graphical.target, dan tty1 tercapai |
 | Varian XFCE + LightDM | **Dibangun dan diuji**; GRUB, autologin LightDM, session XFCE, keyboard, dan mouse tervalidasi di QEMU |
+
+## Stage 3H — Verifikasi runtime final (2026-11-05)
+
+Empat komponen yang sebelumnya NOT VERIFIED kini diverifikasi **di dalam sesi
+XFCE nyata** (login serial `user`/`live`, query `xfconf-query` dengan
+`DISPLAY=:0`, screendump QMP, analisis piksel). Bukan dari keberadaan file.
+
+| Komponen | Target | Bukti runtime | Status |
+|---|---|---|---|
+| Inter typography | `Inter 11` | `xfconf-query -c xsettings -p /Gtk/FontName` → `Inter 11`; `MonospaceFontName` → `JetBrains Mono 11`; `fc-match Inter` → `Inter-Regular.otf` | lulus |
+| DMZ-Black cursor | `DMZ-Black` 24 px | `CursorThemeName` → `DMZ-Black`, `CursorThemeSize` → `24`; dir kursor 88 entri; `cursor.theme` Inherits=DMZ-Black | lulus |
+| ORACLE-Papirus priority | ORACLE menang atas Papirus | `IconThemeName` → `ORACLE-Papirus`; ikon dock memakai Steel `#344653` (292 px); **0 piksel biru Arc**; `#1E88E5` hanya dari ikon browser yang memang tidak ada di subset ORACLE (fallback Papirus, bukan regresi) | lulus |
+| Terminal ANSI 16-slot | 16/16 slot | `xfce4-terminal /font-name` → `JetBrains Mono 11`; render 16 blok (`\e[40m`–`\e[47m`, `\e[100m`–`\e[107m`); **16/16 warna palet cocok** dengan `terminalrc` | lulus |
+
+Catatan diagnostik: escape `\033[4Nm` untuk N≥8 **tidak** memetakan ke bright
+color; yang benar `\033[100m`–`\033[107m`. Kesalahan ini sempat membuat slot 8–15
+tampak gagal — bukan bug image.
+
+**Regression test** (ISO yang sama, 1920×1080):
+
+| Item | Target | Hasil |
+|---|---|---|
+| Wallpaper Ivory + ring | `#E9E5DA` + `#D1D3CC` | 44 + 38 sampel ✔ |
+| Panel atas Steel | `#344653`, 32 px | ✔ 32 px |
+| Dock Porcelain | `#F5F3EC`, 48 px, 27.08% | ✔ 48 px, 519 px, center 959/960 |
+| Layout desktop | centered, tanpa overflow | ✔ |
+
+**Tidak ada perbaikan kode diperlukan** — keempat komponen sudah benar sejak
+Stage 3C/3F/3G. Tidak ada build ulang pada stage ini. ISO R2
+(`35fadba2…ad3ca`) tetap menjadi artefak valid.
+
+## Stage 3G — R2 lebar dock (2026-11-05)
+
+**Akar masalah:** `xfce4-panel` menyimpan panjang panel sebagai **persen**, bukan
+piksel. `panel/panel-window.c` mendeklarasikan
+`g_param_spec_double("length", 1, 100, 10)` dan setter-nya
+`g_value_get_double(value) / 100`. Render memakai
+`panel_width = CLAMP(natural_plugin_width, area_width × length/100, area_width)`.
+
+Konfigurasi lama menulis `type="uint" value="520"` untuk dock. Tipe salah dan
+nilai di luar rentang 1–100, sehingga properti ditolak dan panel jatuh ke
+default **10%** — lebar mengikuti konten (terukur 256 px @1280), bukan 520 px.
+Panel atas juga memakai `type="uint"` untuk `length=100`; nilainya kebetulan
+valid tapi tipenya tetap salah.
+
+**Perbaikan:**
+
+| Panel | Sebelum | Sesudah |
+|---|---|---|
+| panel-1 (atas) | `length type="uint" 100` | `length type="double" 100` |
+| panel-2 (dock) | `length type="uint" 520` | `length type="double" 27.08` |
+
+`27.08% = 520/1920`, sesuai target desain. `length-adjust=true` dipertahankan
+pada dock agar panel melebar otomatis bila plugin butuh ruang lebih — mencegah
+ikon terpotong pada layar sempit.
+
+`tools/design/gen_panel.py` ikut diperbaiki karena generator masih menulis tipe
+`uint` px; tanpa itu output generator akan meregresi.
+
+**Validasi dua resolusi** (screendump QMP + analisis piksel):
+
+| Resolusi | Dock lebar | Rasio | Centered | Panel atas | Wallpaper |
+|---|---|---|---|---|---|
+| 1280×800 | **346 px** | 27.03% | 639 (tengah 640) | 32 px Steel | `#E9E5DA` + ring |
+| 1920×1080 | **519 px** | 27.03% | 959 (tengah 960) | 32 px Steel | `#E9E5DA` + ring |
+
+Selisih 1 px pada 1920 berasal dari pembulatan piksel. Target desain 520 px
+terpenuhi. Pada 1280 px hasil 346 px — proporsional, bukan 520 px absolut,
+sesuai keputusan Arya memakai persentase.
+
+Dock tinggi **48 px** Porcelain `#F5F3EC` di kedua resolusi. Seluruh ikon
+terlihat, tidak ada clipping atau overflow. Panel atas full-width, wallpaper
+Ivory dengan ring Dusty tetap tampil — **tidak ada regresi**.
+
+**Build:** ISO 1.023.410.176 B, SHA-256
+`35fadba2b507d60b407a9fb44d5366324931f369c09d64c778449c136c1ad3ca`,
+dibangun di VM Debian 13 (`require_build_vm()` lulus).
+
+## Stage 3F — Wallpaper R1 selesai (2026-11-05)
+
+**Akar masalah:** xfdesktop 4.20 menyimpan dan membaca backdrop di
+`/backdrop/screen<N>/monitor<NAMA-OUTPUT>/workspace<N>/`, dengan
+`<NAMA-OUTPUT>` = nama output xrandr saat runtime (`Virtual-1` di QEMU,
+`eDP-1`/`HDMI-1` di hardware). Kunci statis `monitor0` di
+`/etc/xdg/xfce4/xfconf/xfce-perchannel-xml/xfce4-desktop.xml` **tidak dipakai**
+xfdesktop 4.20 untuk merender. Konfigurasi tampak benar (`image-path` terisi,
+berkas ada) tetapi desktop tetap memakai wallpaper bawaan.
+
+Bukti diagnosis: `xfconf-query -c xfce4-desktop -l` di live session hanya
+menampilkan `monitor0`, sementara `xrandr --listmonitors` melaporkan
+`Virtual-1`. Setelah kunci `monitorVirtual-1` diisi manual, wallpaper ORACLE
+langsung tampil — membuktikan kunci nama-output yang menentukan.
+
+**Perbaikan:** nama output berbeda tiap mesin, jadi satu nama statis di XML
+hanya benar di satu jenis mesin. Wallpaper kini diterapkan oleh
+`/usr/bin/oracle-wallpaper` lewat `/etc/xdg/autostart/oracle-wallpaper.desktop`.
+Skrip membaca monitor yang benar-benar ada (`xrandr --query`) lalu mengisi
+`image-path`, `image-style=5`, `color-style=0`, `image-show=true` untuk tiap
+monitor, lalu `xfdesktop --reload`. Idempoten; blok `monitor0` dipertahankan
+sebagai cadangan generik.
+
+Catatan penting: `pkill -USR1 xfdesktop` **mematikan** xfdesktop (desktop jadi
+hitam), bukan memuat ulang. Gunakan `xfdesktop --reload`.
+
+**Build:** ISO 1.023.410.176 B, SHA-256
+`f92ebd53a523f064358eabef70e9e7a8d19524c723a1142a5146db6d304d4ff9`,
+dibangun di VM Debian 13 (`require_build_vm()` lulus, tanpa bypass).
+
+**Validasi dari boot bersih** (screendump QMP + analisis piksel):
+
+| Item | Target | Hasil | Status |
+|---|---|---|---|
+| Wallpaper | Ivory `#E9E5DA` + ring Dusty 18% `#D1D3CC` | `#E9E5DA` (40 sampel) + `#D1D3CC` (17) | lulus |
+| Panel atas | Steel `#344653`, 32 px | `#344653`, **32 px** | lulus |
+| Dock bawah | Porcelain `#F5F3EC`, 48 px | `#F5F3EC`, **48 px** | lulus |
+| Motto pada wallpaper | "Work with clarity." | terbaca | lulus |
+| Error kritis | 0 | 0 `[FAILED]`, 0 panic | lulus |
+
+Serial console (Stage 3E) menangkap 619 baris / 46.633 B hingga `oracle login:`.
+
+**Belum diselesaikan (di luar scope 3F):** lebar dock terukur 256 px pada
+layar 1280 px, sedangkan spesifikasi 520 px pada 1920 px. `length` bersifat
+absolut sehingga tidak proporsional di resolusi lain.
 
 ## Phase 2 — Validasi graphical (2026-11-01)
 

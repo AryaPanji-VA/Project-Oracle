@@ -98,6 +98,7 @@ Tasks:
 - [x] Menjalankan proses build image (berhasil di VM Debian 13 pada 2026-10-31).
 - [x] Memverifikasi file image dan hasil build (format ISO9660/hybrid, checksum cocok).
 - [x] Menjalankan image menggunakan QEMU (boot console tervalidasi; ISO desktop lama belum di-boot).
+- [x] Memvalidasi boot graphical end-to-end: serial console menangkap boot hingga `oracle login:`, sesi XFCE mencapai `graphical.target` (Stage 3D–3H).
 - [x] Membangun ulang dan memvalidasi varian XFCE + LightDM (2026-11-01; ISO graphical phase 2 terbentuk dan di-boot: GRUB, autologin LightDM, session XFCE, keyboard, dan input mouse via QMP semuanya tervalidasi).
 - [x] Mendokumentasikan hasil pengujian desktop dan masalah yang ditemukan (lihat `docs/STATUS.md` bagian Phase 2).
 
@@ -130,19 +131,19 @@ Deliverables:
 
 ### Phase 2 — Core Identity & System
 
-**Status:** Planned
+**Status:** In Progress — seluruh task selesai, menunggu keputusan Arya untuk menutup phase
 
 **Goal:** Membentuk identitas ORACLE OS dan menjadikan konfigurasi sistem lebih terstruktur.
 
 Tasks:
 
-- [ ] Menentukan hostname dan identitas distribusi.
-- [ ] Menetapkan konfigurasi dasar sistem.
-- [ ] Menentukan paket bawaan berdasarkan kebutuhan nyata.
-- [ ] Membuat mekanisme konfigurasi ORACLE OS.
-- [ ] Menambahkan skrip pemeliharaan yang terdokumentasi.
-- [ ] Menguji perubahan konfigurasi di QEMU.
-- [ ] Memastikan sistem tetap dapat di-boot setelah perubahan.
+- [x] Menentukan hostname dan identitas distribusi. (`config/oracle.conf`: `NAME="ORACLE OS"`, `ID="oracle"`, `VERSION="0.1.0"`; hook `0100-oracle-identity` menulis `/etc/os-release`, `/etc/hosts`, `/etc/hostname`, `/etc/oracle-release` — diverifikasi 2× run byte-identik)
+- [x] Menetapkan konfigurasi dasar sistem. (`image/auto/config` + `image/config/` — struktur Debian Live terpisah source/workspace)
+- [x] Menentukan paket bawaan berdasarkan kebutuhan nyata. (`oracle-core.list.chroot` + `oracle-desktop.list.chroot`; 17 paket desktop, tiap paket berkomentar alasan; `--apt-recommends false`)
+- [x] Membuat mekanisme konfigurasi ORACLE OS. (CLI `/usr/local/bin/oracle` — identity/version/profile list/check/install; `tests/cli_test.sh` 17/17 lulus)
+- [x] Menambahkan skrip pemeliharaan yang terdokumentasi. (`scripts/build.sh`, `scripts/gen-profile-list.sh`; `docs/DEVELOPMENT.md` 61 baris)
+- [x] Menguji perubahan konfigurasi di QEMU. (Stage 3D–3H: boot graphical end-to-end, serial console, sesi XFCE, wallpaper/panel/dock/ikon/font/terminal terverifikasi piksel)
+- [x] Memastikan sistem tetap dapat di-boot setelah perubahan. (ISO `35fadba2…ad3ca` boot bersih → `oracle login:`; 0 `[FAILED]`, 0 panic)
 
 Deliverables:
 
