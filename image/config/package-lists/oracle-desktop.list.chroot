@@ -53,5 +53,5 @@ librsvg2-common
 fonts-inter
 fonts-jetbrains-mono
 
-# Kursor. lightdm-gtk-greeter.conf memakai cursor-theme-name=dmz-cursor-theme.
+# Kursor. Package: dmz-cursor-theme. Actual cursor theme: DMZ-Black.
 dmz-cursor-theme
