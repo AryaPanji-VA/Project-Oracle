@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ORACLE-OS — XFCE xsettings defaults
+  Target: XFCE 4.20, Debian 13 Trixie
+  Stage 3C. Lapisan default sistem: /etc/xdg, BUKAN /etc/skel.
+
+  Alasan: /etc/xdg dibaca semua akun dan merupakan lapisan default resmi
+  (docs/design/INTEGRATION-READINESS.md section 3.5). File di /etc/skel hanya
+  menyemai home baru dan mudah tertimpa oleh apa yang ditulis sesi setelahnya.
+
+  Nama tema di bawah sudah diverifikasi terhadap direktori nyata:
+    ThemeName      "ORACLE"          -> /usr/share/themes/ORACLE/
+    IconThemeName  "ORACLE-Papirus"  -> /usr/share/icons/ORACLE-Papirus/
+    CursorThemeName "DMZ-Black"      -> /usr/share/icons/DMZ-Black/
+  Paket dmz-cursor-theme TIDAK menyediakan theme bernama "dmz-cursor-theme";
+  paket itu memasang DMZ-Black dan DMZ-White. Nama paket != nama theme.
+-->
+<channel name="xsettings" version="1.0">
+  <property name="Net" type="empty">
+    <property name="ThemeName" type="string" value="ORACLE"/>
+    <property name="IconThemeName" type="string" value="ORACLE-Papirus"/>
+  </property>
+  <property name="Gtk" type="empty">
+    <property name="CursorThemeName" type="string" value="DMZ-Black"/>
+    <property name="CursorThemeSize" type="int" value="24"/>
+    <property name="FontName" type="string" value="Inter 11"/>
+    <property name="MonospaceFontName" type="string" value="JetBrains Mono 11"/>
+  </property>
+  <property name="Xft" type="empty">
+    <property name="Antialias" type="int" value="1"/>
+    <property name="HintStyle" type="string" value="hintslight"/>
+    <property name="RGBA" type="string" value="rgb"/>
+  </property>
+</channel>
