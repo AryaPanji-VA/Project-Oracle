@@ -84,7 +84,7 @@ Semua versi dari `Packages.gz` Debian 13 Trixie (main), diverifikasi.
 | `hicolor-icon-theme` | 0.18-2 | misc | fallback ikon | **ya** | Depends Papirus |
 | `fonts-inter` | 4.1+ds-1 | fonts | UI font | **ya** | `font-name=Inter 11` |
 | `fonts-jetbrains-mono` | 2.304+ds-5 | fonts | terminal font | **ya** | `FontName=JetBrains Mono 11` |
-| `dmz-cursor-theme` | 0.4.5.2 | gnome | kursor | **ya** | `cursor-theme-name=dmz-cursor-theme` |
+| `dmz-cursor-theme` | 0.4.5.2 | gnome | kursor | **ya** | paket ini memasang theme `DMZ-Black` dan `DMZ-White`; runtime memakai `DMZ-Black` |
 | `gtk2-engines-murrine` | 0.98.2-4+b1 | x11 | GTK2 engine | opsional | hanya bila ada app GTK2 |
 
 ### 2.3 Catatan dependency
@@ -112,12 +112,17 @@ Semua versi dari `Packages.gz` Debian 13 Trixie (main), diverifikasi.
     <property name="IconThemeName" type="string" value="ORACLE-Papirus"/>
   </property>
   <property name="Gtk" type="empty">
-    <property name="CursorThemeName" type="string" value="dmz-cursor-theme"/>
+    <property name="CursorThemeName" type="string" value="DMZ-Black"/>
     <property name="CursorThemeSize" type="int" value="24"/>
     <property name="FontName" type="string" value="Inter 11"/>
   </property>
 </channel>
 ```
+
+> **Nama paket vs nama theme.** Paket `dmz-cursor-theme` memasang dua theme
+> kursor: `DMZ-Black` dan `DMZ-White`. Tidak ada theme bernama
+> `dmz-cursor-theme`; memakai nama paket di sini membuat XFCE silent fallback
+> ke kursor default tanpa error. Runtime memakai `DMZ-Black`.
 
 **Tambahan wajib:** `.../etc/gtk-3.0/settings.ini` — channel xsettings XFCE
 tidak mencakup semua aplikasi GTK3.
@@ -127,7 +132,7 @@ tidak mencakup semua aplikasi GTK3.
 gtk-theme-name=ORACLE
 gtk-icon-theme-name=ORACLE-Papirus
 gtk-font-name=Inter 11
-gtk-cursor-theme-name=dmz-cursor-theme
+gtk-cursor-theme-name=DMZ-Black
 ```
 
 ### 3.2 XFCE xfconf defaults
@@ -159,6 +164,23 @@ gtk-cursor-theme-name=dmz-cursor-theme
 ```
 
 `image-style=5` = zoomed. Wallpaper 1920×1200 di-scale ke resolusi layar.
+
+> **KOREKSI (Stage 3F, 2026-11-05) — blok `monitor0` di atas tidak cukup.**
+> xfdesktop 4.20 membaca backdrop di
+> `/backdrop/screen<N>/monitor<NAMA-OUTPUT>/workspace<N>/` dengan
+> `<NAMA-OUTPUT>` = nama output xrandr **saat runtime** (`Virtual-1` di QEMU,
+> `eDP-1`/`HDMI-1` di hardware). Kunci statis `monitor0` tidak dipakai untuk
+> merender: konfigurasi tampak benar tetapi desktop tetap memakai wallpaper
+> bawaan. Terbukti di Stage 3D/3E.
+>
+> Karena nama output berbeda tiap mesin, wallpaper diterapkan runtime oleh
+> `/usr/bin/oracle-wallpaper` (dipanggil `/etc/xdg/autostart/oracle-wallpaper.desktop`),
+> yang membaca `xrandr --query` lalu mengisi kunci yang sesuai untuk setiap
+> monitor, kemudian `xfdesktop --reload`. Blok `monitor0` dipertahankan sebagai
+> cadangan generik, bukan sebagai mekanisme utama.
+>
+> Jangan pakai `pkill -USR1 xfdesktop` untuk memuat ulang — sinyal itu
+> mematikan proses dan desktop jadi hitam. Gunakan `xfdesktop --reload`.
 
 ### 3.4 LightDM GTK Greeter
 

@@ -64,7 +64,7 @@ Ringkas — paket yang **belum** ada di package list dan wajib ditambah:
 | `arc-theme` | basis tema GTK ORACLE |
 | `fonts-inter` | `font-name=Inter 11` |
 | `fonts-jetbrains-mono` | `FontName=JetBrains Mono 11` |
-| `dmz-cursor-theme` | `cursor-theme-name` |
+| `dmz-cursor-theme` | paket kursor; memasang theme `DMZ-Black` dan `DMZ-White` (runtime memakai `DMZ-Black`) |
 | `hicolor-icon-theme` | fallback ikon |
 
 Semua terverifikasi ada di Debian 13 Trixie `main`.

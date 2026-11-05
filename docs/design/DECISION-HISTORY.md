@@ -257,6 +257,34 @@ menentukan adalah binary yang benar-benar dijalankan.
 
 ---
 
+### 1.11 Nama cursor theme `dmz-cursor-theme`
+
+**Dari:** `DESIGN-ASSETS.md` §7 dan `INTEGRATION-READINESS.md` §2.2/§3.1.
+
+**Status:** SUPERSEDED — salah kategori (nama paket dipakai sebagai nama theme).
+
+Spesifikasi lama menulis `cursor-theme-name=dmz-cursor-theme` dan
+`CursorThemeName = dmz-cursor-theme`. Audit paket `dmz-cursor-theme 0.4.5.2`
+menunjukkan isi `/usr/share/icons/` hanya:
+
+| Direktori | `index.theme` | Jumlah cursor |
+|---|---|---:|
+| `DMZ-Black/` | `Name=DMZ (Black)` | 88 |
+| `DMZ-White/` | `Name=DMZ (White)` | 88 |
+| `default/` | **tidak ada** | 0 |
+
+Tidak ada direktori `dmz-cursor-theme`. Memakai nama paket membuat XFCE
+**silent fallback** ke kursor default — tidak error, jadi tidak ketahuan
+kecuali kursor diperiksa secara visual.
+
+**Digantikan oleh:** `DMZ-Black` untuk runtime. `DMZ-White` tersedia sebagai
+alternatif di paket yang sama.
+
+**Pelajaran:** nama paket Debian tidak selalu sama dengan nama aset yang
+dipasangnya. Verifikasi harus membaca isi paket, bukan metadata paket.
+
+---
+
 ## 2. Yang dipertahankan dari dokumen lama (tidak superseded)
 
 Informasi ini masih berlaku dan sudah dipindahkan ke dokumen aktif:
@@ -307,7 +335,7 @@ sebagai titik nol, **bukan** kondisi sekarang.
 | Panel | `default.xml` bawaan upstream | susunan ORACLE |
 | Dock | belum ada | Panel XFCE kedua |
 | Ikon | Adwaita, default, hicolor, locolor | Papirus |
-| Kursor | tidak ada tema khusus | DMZ |
+| Kursor | tidak ada tema khusus | DMZ-Black (dari paket `dmz-cursor-theme`) |
 | GTK theme | tujuh tema bawaan | belum ditetapkan |
 | Font | DejaVu saja | Inter + JetBrains Mono |
 | `gtk-3.0/settings.ini` | tidak ada | ada |

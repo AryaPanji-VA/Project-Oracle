@@ -75,7 +75,7 @@ menekan motto; panel 24 px membuat target klik terlalu kecil untuk
 |---|---|---|
 | Posisi | `p=10` (SC, bawah tengah) | enum `SnapPosition` |
 | Tinggi | **48 px** | ≤ `Z_BOTTOM_PX` 104 wallpaper |
-| Panjang | 520 px (`length-adjust=true`) | 7 item, piksel tetap |
+| Panjang | **27.08%** viewport (`length` = persen 1–100, `length-adjust=true`) | 7 item; 520 px @1920 |
 | Icon size | 32 px | — |
 | Latar | Porcelain `#F5F3EC`, alpha 1.0 | `background-style=1` |
 | Border | Dusty `#667D89` 1 px | 3.89:1 vs Porcelain |
@@ -107,12 +107,21 @@ garis berat.
 Ini satu-satunya tempat Dusty Blue muncul sebagai elemen struktural. Di
 tempat lain Dusty hanya dipakai sebagai watermark (opacity 18%).
 
-### Kenapa 48 px dan 520 px
+### Kenapa 48 px dan 27.08%
 
 48 px tinggi memberi ikon 32 px dengan margin 8 px atas-bawah — cukup untuk
-target klik nyaman tanpa terlihat gemuk. 520 px panjang = 7 item × ~56 px +
-padding; cukup untuk 4 launcher mayor, tidak lebih. Dock yang terlalu
-panjang berhenti terasa seperti baki dan mulai terasa seperti panel kedua.
+target klik nyaman tanpa terlihat gemuk. Panjang dinyatakan sebagai **persen**,
+bukan piksel: xfce4-panel menyimpan `length` sebagai persen 1–100
+(`g_param_spec_double("length", 1, 100, 10)`; setter membagi 100), lalu render
+memakai `panel_width = CLAMP(natural_plugin_width, area_width × length/100, area_width)`.
+
+`27.08% = 520/1920`, sehingga pada 1920 px hasilnya 520 px — 7 item × ~56 px
+plus padding; cukup untuk 4 launcher mayor, tidak lebih. Pada 1280 px hasilnya
+346 px, proporsional. Menulis nilai piksel (`520`) ke properti ini membuat nilai
+ditolak dan panel jatuh ke default 10% — itu bug R2 yang diperbaiki Stage 3G.
+
+Dock yang terlalu panjang berhenti terasa seperti baki dan mulai terasa seperti
+panel kedua.
 
 ### Kenapa Brass Ink, bukan Muted Brass
 

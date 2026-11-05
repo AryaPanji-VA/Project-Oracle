@@ -335,7 +335,7 @@ Plugin (kiri ke kanan): `applicationsmenu`, `launcher` Terminal,
 |---|---|
 | Posisi | `p=10` (SC, bawah tengah) |
 | Tinggi | 48 px |
-| Panjang | 520 px (`length-adjust=true`) |
+| Panjang | **27.08%** viewport (`length` bertipe persen, bukan px; `length-adjust=true`) |
 | Icon size | 32 px |
 | Latar | Porcelain `#F5F3EC`, alpha 1.0 |
 | Border | Dusty `#667D89` 1 px (3.89:1) |
@@ -347,6 +347,22 @@ Plugin (kiri ke kanan): `applicationsmenu`, `launcher` Terminal,
 Plugin (kiri ke kanan): `showdesktop`, `separator` (garis), `launcher`
 Terminal, `launcher` Files, `launcher` Web Browser, `launcher` App Finder,
 `separator` (garis).
+
+> **R2 — kenapa 27.08%, bukan 520 px (Stage 3G, 2026-11-05).**
+> `xfce4-panel` menyimpan panjang panel sebagai **persen**, bukan piksel:
+> `panel/panel-window.c` mendeklarasikan `g_param_spec_double("length", 1, 100, 10)`
+> dan setter-nya `g_value_get_double(value) / 100`. Render memakai
+> `panel_width = CLAMP(natural_plugin_width, area_width × length/100, area_width)`.
+>
+> Konfigurasi lama menulis `type="uint" value="520"`. Tipe dan rentangnya salah,
+> nilai ditolak, panel jatuh ke default **10%** — sehingga lebar mengikuti
+> konten (terukur 256 px pada layar 1280 px), bukan 520 px. Itu sebabnya dock
+> tampak lebih pendek dari desain.
+>
+> Nilai sekarang `type="double" value="27.08"` = 520/1920. Pada 1920 px
+> menghasilkan 520 px (sesuai desain); pada 1280 px menghasilkan 347 px
+> (proporsional). `length-adjust=true` membuat panel melebar otomatis bila
+> plugin butuh ruang lebih, sehingga ikon tidak pernah terpotong.
 
 ### 8.3 Border bawah wajib, bukan pilihan
 
