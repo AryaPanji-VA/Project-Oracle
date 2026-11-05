@@ -128,7 +128,7 @@ def build_xml():
     L.append('      <property name="position" type="string" value="p=6;x=0;y=0"/>')
     L.append('      <property name="mode" type="uint" value="0"/>')          # horizontal
     L.append('      <property name="size" type="uint" value="%d"/>' % TOP_H)
-    L.append('      <property name="length" type="uint" value="100"/>')      # 100%
+    L.append('      <property name="length" type="double" value="100"/>')      # 100% (persen, bukan px)
     L.append('      <property name="length-adjust" type="bool" value="false"/>')
     L.append('      <property name="icon-size" type="uint" value="%d"/>' % TOP_ICON)
     L.append('      <property name="nrows" type="uint" value="1"/>')
@@ -152,7 +152,11 @@ def build_xml():
     L.append('      <property name="position" type="string" value="p=10;x=0;y=0"/>')
     L.append('      <property name="mode" type="uint" value="0"/>')
     L.append('      <property name="size" type="uint" value="%d"/>' % BOTTOM_H)
-    L.append('      <property name="length" type="uint" value="520"/>')     # px tetap
+    # length adalah PERSEN (1-100) di panel-window.c: g_value_get_double(v)/100.
+    # Menulis px di sini (520) membuat g_param_spec_double menolak nilai dan
+    # panel jatuh ke default 10% -> lebar = natural konten (256 px @1280).
+    # 27.08% = 520/1920, target desain.
+    L.append('      <property name="length" type="double" value="27.08"/>')  # 27.08% viewport
     L.append('      <property name="length-adjust" type="bool" value="true"/>')
     L.append('      <property name="icon-size" type="uint" value="%d"/>' % BOTTOM_ICON)
     L.append('      <property name="nrows" type="uint" value="1"/>')
