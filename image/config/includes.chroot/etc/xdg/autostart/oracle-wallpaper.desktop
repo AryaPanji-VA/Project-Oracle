@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=ORACLE Wallpaper
+Comment=Terapkan wallpaper ORACLE ke semua monitor terdeteksi
+Exec=/usr/bin/oracle-wallpaper
+Terminal=false
+NoDisplay=true
+OnlyShowIn=XFCE;
+X-GNOME-Autostart-enabled=true
+X-XFCE-Autostart-Override=true

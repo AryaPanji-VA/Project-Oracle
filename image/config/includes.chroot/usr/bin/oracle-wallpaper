@@ -1,0 +1,76 @@
+#!/bin/sh
+# ============================================================================
+# oracle-wallpaper — terapkan wallpaper ORACLE ke SEMUA monitor terdeteksi
+# Target: XFCE 4.20, Debian 13 Trixie
+#
+# KENAPA SKRIP INI ADA
+# xfdesktop 4.20 menyimpan backdrop di
+#   /backdrop/screen<N>/monitor<NAMA-OUTPUT>/workspace<N>/...
+# dengan <NAMA-OUTPUT> = nama xrandr runtime ("Virtual-1" di QEMU, "eDP-1",
+# "HDMI-1", dst di hardware nyata). Kunci statis "monitor0" di
+# /etc/xdg/xfce4/xfconf/xfce-perchannel-xml/xfce4-desktop.xml TIDAK dipakai
+# xfdesktop 4.20 untuk merender, sehingga wallpaper tidak tampil walau
+# konfigurasinya benar. Terbukti di Stage 3D/3E: image-path benar, berkas ada,
+# tapi desktop tetap wallpaper bawaan.
+#
+# Karena nama output berbeda tiap mesin, menulis satu nama ke XML statis hanya
+# akan benar di satu jenis mesin. Skrip ini membaca monitor yang BENAR-BENAR
+# ada saat sesi mulai lalu mengisi kunci yang sesuai.
+#
+# Sifat: idempoten, tanpa jaringan, tidak menyentuh berkas milik user lain.
+# ============================================================================
+
+set -eu
+
+IMG="/usr/share/backgrounds/oracle/workspace-1920x1200.png"
+[ -f "${IMG}" ] || exit 0
+
+CH="xfce4-desktop"
+
+# Tunggu xfconfd siap; autostart bisa balapan dengan xfsettingsd.
+_i=0
+while [ "${_i}" -lt 30 ]; do
+	xfconf-query -c "${CH}" -l >/dev/null 2>&1 && break
+	_i=$((_i + 1))
+	sleep 0.2
+done
+
+# Ambil daftar monitor dari xrandr. Kalau xrandr tidak ada, pakai daftar kunci
+# yang sudah ada di xfconf.
+MONITORS="$(xrandr --query 2>/dev/null | awk '$2=="connected"{print $1}')"
+
+set_prop() { # path value type
+	xfconf-query -c "${CH}" -p "$1" -s "$2" --create -t "$3" 2>/dev/null || true
+}
+
+apply_for() { # monitor-key, workspace
+	_m="$1"; _w="$2"
+	base="/backdrop/screen0/${_m}/${_w}"
+	set_prop "${base}/last-image"  "${IMG}" string
+	set_prop "${base}/image-path"  "${IMG}" string
+	set_prop "${base}/image-style" 5        int
+	set_prop "${base}/color-style" 0        int
+	set_prop "${base}/image-show"  true     bool
+}
+
+if [ -n "${MONITORS}" ]; then
+	for _out in ${MONITORS}; do
+		apply_for "monitor${_out}" workspace0
+	done
+fi
+
+# Jaring keamanan: kalau xrandr kosong (mis. sesi belum punya X), isi kunci
+# yang sudah ada supaya tetap konsisten.
+xfconf-query -c "${CH}" -l 2>/dev/null | grep -E '^/backdrop/screen[0-9]+/monitor[^/]+/workspace[0-9]+/image-path$' |
+	while IFS= read -r _p; do
+		xfconf-query -c "${CH}" -p "${_p}" -s "${IMG}" 2>/dev/null || true
+	done
+
+# Muat ulang xfdesktop supaya perubahan langsung terlihat.
+# JANGAN pakai `pkill -USR1 xfdesktop`: sinyal itu mematikan proses sehingga
+# desktop jadi hitam dan tidak ada yang menghidupkannya kembali. `--reload`
+# meminta instance yang berjalan memuat ulang backdrop tanpa restart.
+if ! xfdesktop --reload 2>/dev/null; then
+	# Fallback: kalau xfdesktop belum berjalan, jalankan di latar.
+	xfdesktop >/dev/null 2>&1 &
+fi
