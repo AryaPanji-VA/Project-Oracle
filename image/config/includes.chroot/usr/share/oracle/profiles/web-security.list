@@ -1,7 +1,19 @@
 # Profile: web-security — pengujian keamanan aplikasi web
 # Hanya untuk sistem milik sendiri atau yang punya izin tertulis.
-nikto
+#
+# CATATAN KOMPATIBILITAS DEBIAN 13:
+# `nikto` TIDAK tersedia di repo Debian 13 (trixie). Memasukkannya membuat
+# `apt-get install` gagal dan seluruh build berhenti. Penggantinya:
+#   wfuzz   — fuzzing parameter/endpoint, padanan terdekat untuk pemindaian
+#             permukaan web secara otomatis
+#   ffuf    — fuzzer HTTP cepat, pengganti sebagian peran dirb
+# `dirb` dipertahankan karena masih tersedia di trixie.
+#
+# Divalidasi dengan `apt-cache policy` di dalam container oracle-builder:13
+# pada Debian 13.7.
+wfuzz
 sqlmap
 dirb
 gobuster
 whatweb
+ffuf

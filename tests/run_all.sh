@@ -31,6 +31,7 @@ done
 # Urutan: yang paling murah dan paling dasar dulu.
 TESTS=(
 	"tests/posix_test.sh"          # statis: bahasa POSIX
+	"tests/package_list_format_test.sh" # statis: format package-list & profile
 	"tests/profile_list_test.sh"   # generator package-list
 	"tests/cli_test.sh"            # CLI dasar
 	"tests/cli_packages_test.sh"   # parser & validasi paket CLI
