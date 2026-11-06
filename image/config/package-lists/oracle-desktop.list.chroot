@@ -13,6 +13,80 @@
 xfce4
 xfce4-terminal
 
+# --- Aplikasi harian --------------------------------------------------------
+# Dibutuhkan agar image "usable", bukan sekadar boot. Recommends APT dimatikan
+# (image/auto/config), jadi `xfce4` TIDAK menarik aplikasi ini sendiri; tanpa
+# daftar ini menu Applications kosong dan dock hanya berisi terminal + file
+# manager.
+#
+# PENTING: live-build hanya membuang baris yang DIAWALI '#'
+# (chroot_package-lists: Expand_packagelist | grep -v '^#'). Komentar di
+# belakang nama paket akan ikut terbaca sebagai bagian nama dan membuat apt
+# gagal. Semua komentar harus di baris sendiri.
+xfce4-appfinder
+xfce4-screenshooter
+xfce4-taskmanager
+xfce4-notifyd
+mousepad
+ristretto
+galculator
+file-roller
+evince
+gvfs
+gvfs-backends
+xdg-utils
+
+# --- Peramban web -----------------------------------------------------------
+# Dock plugin-15 memakai xfce4-web-browser.desktop -> exo-open --launch
+# WebBrowser. Tanpa peramban terpasang, tombol itu tidak melakukan apa pun.
+firefox-esr
+
+# --- Audio ------------------------------------------------------------------
+# xfce4 TIDAK menarik stack audio. Tanpa paket ini tidak ada suara sama sekali
+# dan xfce4-pulseaudio-plugin tidak punya backend.
+pipewire
+pipewire-pulse
+wireplumber
+# KENAPA pulseaudio-utils: `pipewire-pulse` hanya menyediakan server yang
+# kompatibel dengan protokol PulseAudio, tetapi BINER `pactl` ada di
+# pulseaudio-utils. Tanpa ini plugin audio panel terpasang tapi tidak bisa
+# menampilkan atau mengubah volume — panel tampak mati saat demo.
+pulseaudio-utils
+pavucontrol
+xfce4-pulseaudio-plugin
+
+# --- Polkit -----------------------------------------------------------------
+# Agent polkit grafis untuk dialog otentikasi (mount disk, ubah jaringan).
+#
+# KENAPA `mate-polkit`: Debian 13 TIDAK menyediakan agent khusus XFCE
+# (`xfce-polkit` dan `policykit-1-gnome` sudah tidak ada di trixie), dan
+# task-xfce-desktop tidak menarik agent apa pun. Akibatnya dialog polkit
+# tidak pernah muncul — tombol yang butuh otentikasi tampak mati saat demo.
+#
+# `mate-polkit` adalah agent GTK3 yang memakai tema GTK aktif, jadi tampil
+# konsisten dengan sesi XFCE dan tema ORACLE. Autostart-nya TIDAK terbatas
+# pada MATE (`NotShowIn=GNOME;KDE;`), sehingga agent otomatis jalan di sesi
+# XFCE tanpa perlu file autostart tambahan.
+#
+# KENAPA eksplisit: kalau dibiarkan ke Recommends, yang tertarik justru
+# `ukui-polkit` — agent dari desktop UKUI yang memunculkan dialog bergaya
+# asing di tengah demo.
+mate-polkit
+
+# --- Manajemen daya ---------------------------------------------------------
+xfce4-power-manager
+
+# --- Jaringan ---------------------------------------------------------------
+# Live session tanpa NetworkManager hanya punya DHCP sekali jalan dari
+# /etc/network/interfaces. Itu cukup untuk boot, tapi TIDAK cukup untuk demo:
+# tidak ada applet panel, tidak bisa ganti Wi-Fi, tidak bisa melihat status
+# koneksi. NetworkManager yang mengelola semuanya, termasuk wired.
+#
+# Konfigurasinya ada di includes.chroot/etc/NetworkManager/conf.d/ — lihat
+# komentar di sana soal hubung-hubungan dengan networking.service live-build.
+network-manager
+network-manager-gnome
+
 # --- Display manager & greeter ---------------------------------------------
 lightdm
 lightdm-gtk-greeter

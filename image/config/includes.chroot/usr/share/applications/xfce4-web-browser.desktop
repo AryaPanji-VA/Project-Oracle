@@ -1,0 +1,16 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Web Browser
+Name[en]=Web Browser
+GenericName=Web Browser
+Comment=Browse the World Wide Web
+Comment[en]=Browse the World Wide Web
+Exec=firefox-esr %u
+TryExec=firefox-esr
+Icon=firefox-esr
+Terminal=false
+Categories=Network;WebBrowser;
+MimeType=text/html;text/xml;application/xhtml+xml;x-scheme-handler/http;x-scheme-handler/https;
+StartupNotify=true
+StartupWMClass=firefox-esr
