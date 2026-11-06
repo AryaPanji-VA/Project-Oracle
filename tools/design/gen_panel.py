@@ -63,7 +63,11 @@ TOP_PLUGINS = [
     ("tasklist", {"grouping": 1, "flat-buttons": True}),            # 5
     ("separator", {"style": 0, "expand": True}),    # 6 spacer
     ("systray", {"square-icons": True}),            # 7
-    ("clock", {"digital-layout": 1, "digital-time-format": "%H:%M"}),  # 8
+    # KENAPA audio eksplisit: tanpa plugin ini tidak ada kontrol volume di
+    # panel, padahal suara berjalan. Untuk demo, panel yang tidak punya
+    # kontrol volume terlihat seperti sistem yang belum selesai.
+    ("pulseaudio", {"enable-keyboard-shortcuts": True}),   # 8
+    ("clock", {"digital-layout": 1, "digital-time-format": "%H:%M"}),  # 9
 ]
 
 BOTTOM_PLUGINS = [

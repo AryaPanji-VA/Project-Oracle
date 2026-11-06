@@ -81,6 +81,12 @@ venv/
 *.egg-info/
 .pytest_cache/
 
+# ---- Artefak generator desain ---------------------------------------------
+# tools/design/gen_*.py menulis hasilnya ke sini (XML siap-pasang + preview).
+# Sumbernya ada di tools/design/, jadi output ini tidak perlu masuk Git —
+# sama seperti hasil build image.
+/tools/panel/
+
 # ---- Catatan lokal --------------------------------------------------------
 notes.local.md
 *.local.conf
