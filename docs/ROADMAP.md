@@ -191,39 +191,46 @@ Deliverables:
 
 ### Phase 4 — ORACLE Tooling
 
-**Status:** Planned
+**Status:** Done (2026-11-08)
 
 **Goal:** Mengembangkan utilitas dan command-line tools sendiri untuk membantu pengelolaan dan pembelajaran sistem.
 
 Tasks:
 
-- [ ] Mengidentifikasi kebutuhan tooling yang benar-benar muncul selama pengembangan.
-- [ ] Menentukan fungsi dan antarmuka CLI awal.
-- [ ] Membuat tool pertama dengan ruang lingkup kecil.
-- [ ] Menambahkan validasi input dan penanganan error.
-- [ ] Membuat pengujian dan dokumentasi penggunaan.
-- [ ] Mengintegrasikan tool ke image hanya setelah pengujian berhasil.
+- [x] Mengidentifikasi kebutuhan tooling yang benar-benar muncul selama pengembangan.
+- [x] Menentukan fungsi dan antarmuka CLI awal.
+- [x] Membuat tool pertama dengan ruang lingkup kecil.
+- [x] Menambahkan validasi input dan penanganan error.
+- [x] Membuat pengujian dan dokumentasi penggunaan.
+- [x] Mengintegrasikan tool ke image hanya setelah pengujian berhasil.
 
 Contoh kemungkinan tooling:
 
-- Pemeriksaan informasi sistem.
-- Pemeriksaan status konfigurasi ORACLE OS.
-- Pembantu proses build dan validasi image.
-- Pemeriksaan kesehatan sistem.
-- Pengelolaan catatan eksperimen lab.
+- Pemeriksaan informasi sistem. → `oracle status`
+- Pemeriksaan status konfigurasi ORACLE OS. → `oracle doctor`
+- Pembantu proses build dan validasi image. → `scripts/build.sh`, `tests/run_all.sh`
+- Pemeriksaan kesehatan sistem. → `oracle doctor`
+- Pengelolaan catatan eksperimen lab. → `oracle lab`
 
 Deliverables:
 
-- Satu atau lebih CLI tools yang berfungsi.
-- Dokumentasi perintah dan contoh penggunaan.
-- Pengujian untuk fungsi utama.
+- Satu atau lebih CLI tools yang berfungsi. → `oracle status`, `oracle doctor`, `oracle lab`
+- Dokumentasi perintah dan contoh penggunaan. → `docs/ORACLE-TOOLING.md`
+- Pengujian untuk fungsi utama. → `tests/oracle_cli_modules_test.sh` (29 pemeriksaan)
 
 **Acceptance criteria:**
 
-- Setiap tool memiliki tujuan yang jelas.
-- Perilaku dan output dapat diverifikasi.
-- Error ditangani dengan baik.
-- Tool tidak melakukan perubahan destruktif secara diam-diam.
+- Setiap tool memiliki tujuan yang jelas. ✓
+- Perilaku dan output dapat diverifikasi. ✓ (`oracle lab status` memverifikasi
+  isolasi secara struktural; `oracle doctor` melaporkan temuan)
+- Error ditangani dengan baik. ✓ (pesan menyebutkan sebab dan perintah perbaikan,
+  mis. `sudo oracle profile install networking`)
+- Tool tidak melakukan perubahan destruktif secara diam-diam. ✓ (`status` dan
+  `doctor` hanya membaca; `lab start/stop` hanya menyentuh namespace dan state
+  miliknya sendiri)
+
+Catatan: modul ditulis POSIX sh dan dijalankan dengan `dash`, bukan bash.
+Rincian desain dan jebakan yang sudah dilewati ada di `docs/ORACLE-TOOLING.md`.
 
 ### Phase 5 — Reliability & Release
 
