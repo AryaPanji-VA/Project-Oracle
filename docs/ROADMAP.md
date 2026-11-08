@@ -15,11 +15,11 @@ Pengembangan dimulai dengan menggunakan kernel Linux yang sudah tersedia dan mem
 
 ### Project Goals
 
-- [ ] Memahami struktur dan proses pembangunan distribusi Linux.
-- [ ] Menghasilkan image ORACLE OS yang dapat di-boot.
-- [ ] Mengembangkan dan menguji sistem di QEMU tanpa mengganggu sistem utama.
-- [ ] Membentuk identitas, konfigurasi, paket, dan tooling ORACLE OS.
-- [ ] Membangun cybersecurity lab yang terisolasi.
+- [x] Memahami struktur dan proses pembangunan distribusi Linux.
+- [x] Menghasilkan image ORACLE OS yang dapat di-boot.
+- [x] Mengembangkan dan menguji sistem di QEMU tanpa mengganggu sistem utama.
+- [x] Membentuk identitas, konfigurasi, paket, dan tooling ORACLE OS.
+- [ ] Membangun cybersecurity lab yang terisolasi. (sebagian: `oracle lab` sudah berjalan dan terverifikasi; target latihan & prosedur eksperimen belum)
 - [ ] Mempelajari arsitektur kernel dan mengembangkan kernel eksperimental pada tahap lanjutan.
 
 ### Non-Goals untuk Versi Awal
@@ -83,7 +83,7 @@ Deliverables:
 
 ### Phase 1 — First Bootable ORACLE OS
 
-**Status:** In Progress
+**Status:** Complete (2026-11-08)
 
 **Goal:** Menghasilkan image Linux minimal berbasis Debian menggunakan `live-build` (Debian Live) dan membuktikan bahwa image tersebut dapat di-boot.
 
@@ -91,7 +91,7 @@ Deliverables:
 
 Tasks:
 
-- [ ] Memahami cara kerja Debian Live dan `live-build`.
+- [x] Memahami cara kerja Debian Live dan `live-build`. (didokumentasikan di `docs/ARCHITECTURE.md`; pipeline `lb config` → debootstrap → chroot hooks → squashfs → xorriso dipakai dan di-debug sendiri selama Phase 5)
 - [x] Menentukan lingkungan build yang aman dan terpisah (VM Debian 13 disposable; NAT, tanpa disk/shared folder host; smoke test rootful Podman lulus).
 - [x] Menyiapkan konfigurasi image minimal ORACLE OS (console core + source config XFCE/LightDM terpisah).
 - [x] Menentukan paket awal yang benar-benar diperlukan untuk varian console dan desktop.
@@ -131,7 +131,7 @@ Deliverables:
 
 ### Phase 2 — Core Identity & System
 
-**Status:** In Progress — seluruh task selesai, menunggu keputusan Arya untuk menutup phase
+**Status:** Complete (2026-11-08) — seluruh task selesai; keputusan menutup phase diambil 2026-11-08
 
 **Goal:** Membentuk identitas ORACLE OS dan menjadikan konfigurasi sistem lebih terstruktur.
 
@@ -161,19 +161,19 @@ Deliverables:
 
 ### Phase 3 — Sentinel Security Lab
 
-**Status:** Planned
+**Status:** In Progress — 4/7 task selesai lewat `oracle lab` (2026-11-08)
 
 **Goal:** Mengembangkan lingkungan pembelajaran cybersecurity yang terisolasi dan dapat digunakan untuk eksperimen yang terkontrol.
 
 Tasks:
 
-- [ ] Mendefinisikan model isolasi lab.
-- [ ] Menentukan kebutuhan virtual network dan VM.
+- [x] Mendefinisikan model isolasi lab. (dua network namespace `oracle-lab-atk`/`oracle-lab-tgt` dihubungkan veth pair, tanpa default route dan tanpa NAT; didokumentasikan di `docs/ORACLE-TOOLING.md`)
+- [x] Menentukan kebutuhan virtual network dan VM. (netns + veth, bukan VM: lebih ringan dan tidak butuh image tambahan; subnet `10.66.0.0/24`, attacker `10.66.0.1`, target `10.66.0.2`)
 - [ ] Menyiapkan snapshot untuk pemulihan eksperimen.
-- [ ] Memilih tool berdasarkan tujuan pembelajaran.
+- [x] Memilih tool berdasarkan tujuan pembelajaran. (profil `networking` + `web-security`; `oracle lab` melaporkan alat yang belum terpasang alih-alih gagal diam)
 - [ ] Menyiapkan target latihan lokal yang sengaja dibuat untuk pengujian.
 - [ ] Mendokumentasikan prosedur eksperimen dan pemulihan.
-- [ ] Memverifikasi batas jaringan dan akses sebelum menjalankan pengujian.
+- [x] Memverifikasi batas jaringan dan akses sebelum menjalankan pengujian. (`oracle lab start` menjalankan `_verify`: host tidak bisa menjangkau lab, lab tidak punya rute keluar, DNS ditutup; diverifikasi 22/22 di ISO hidup)
 
 Deliverables:
 
@@ -234,27 +234,27 @@ Rincian desain dan jebakan yang sudah dilewati ada di `docs/ORACLE-TOOLING.md`.
 
 ### Phase 5 — Reliability & Release
 
-**Status:** Planned
+**Status:** Done (2026-11-08)
 
 **Goal:** Membuat proses build dan pengujian ORACLE OS lebih konsisten, terdokumentasi, dan mudah direproduksi.
 
 Tasks:
 
-- [ ] Mengulang proses build dari kondisi yang terdokumentasi.
-- [ ] Menetapkan checklist pengujian untuk setiap image.
-- [ ] Menguji boot, konfigurasi, dan fungsi inti.
-- [ ] Mendokumentasikan known issues.
-- [ ] Menetapkan versi dan catatan perubahan.
-- [ ] Menyimpan checksum untuk artefak rilis.
-- [ ] Menetapkan prosedur backup dan pemulihan proyek.
+- [x] Mengulang proses build dari kondisi yang terdokumentasi. (build dari `0a639ae` di guest Debian 13; 5 iterasi sampai ISO demo; `docs/PHASE5-DEMO-USABLE.md`)
+- [x] Menetapkan checklist pengujian untuk setiap image. (`verify-iso.py` — 40/40 cek E2E: boot, login, identitas, panel, audio, polkit, unit gagal)
+- [x] Menguji boot, konfigurasi, dan fungsi inti. (40/40 pada ISO demo; 22/22 pada ISO tooling)
+- [x] Mendokumentasikan known issues. (`docs/PHASE5-DEMO-USABLE.md` §batas: belum ada installer, tidak ada persistensi, belum diuji hardware asli, belum ada hardening)
+- [x] Menetapkan versi dan catatan perubahan. (`config/oracle.conf` `VERSION="0.1.0"`; `/etc/oracle-release`; `oracle version`)
+- [x] Menyimpan checksum untuk artefak rilis. (`build/SHA256SUMS`; `~/Backups/ORACLE-OS-*.iso.sha256`, `sha256sum -c` OK)
+- [x] Menetapkan prosedur backup dan pemulihan proyek. (`~/oracle-recovery/README.md`, `boot-vm.sh`, `run-demo.sh`, `PHASE5-SUMMARY.md`; snapshot qcow2 `pre-phase5-recovery`)
 
 Deliverables:
 
-- Checklist pengujian.
-- Build instructions yang diperbarui.
-- Release notes.
-- Informasi versi dan checksum image.
-- Dokumentasi known issues.
+- Checklist pengujian. (`verify-iso.py`, `verify-tooling.py`, `tests/run_all.sh` 10/10 suite / 246 assertion)
+- Build instructions yang diperbarui. (`docs/DEVELOPMENT.md`, `docs/PHASE5-DEMO-RUNBOOK.md`)
+- Release notes. (`docs/PHASE5-DEMO-USABLE.md`)
+- Informasi versi dan checksum image. (`build/SHA256SUMS`, `~/Backups/*.sha256`)
+- Dokumentasi known issues. (`docs/PHASE5-DEMO-USABLE.md`)
 
 **Acceptance criteria:**
 
