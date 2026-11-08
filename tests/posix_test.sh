@@ -29,9 +29,19 @@ ok() { printf '  ok   %s\n' "$1"; pass=$((pass+1)); }
 no() { printf '  FAIL %s\n' "$1"; fail=$((fail+1)); }
 
 # Kumpulkan semua berkas skrip yang diklaim POSIX (shebang #!/bin/sh).
+# Hanya berkas MILIK REPO yang diperiksa.
+#
+# PENTING: chroot hasil build berisi skrip milik Debian (xdg-*, cron.daily,
+# dll) yang memang memakai bashism karena shebang-nya bukan #!/bin/sh.
+# Sebelum ini hanya `.git/` yang dikecualikan, sehingga setelah `lb build`
+# berjalan, tes melaporkan ~11 kegagalan dari kode pihak ketiga di
+# `build/chroot` — bukan dari repo. Itu membuat suite gagal hanya karena
+# pernah build, dan menutupi kegagalan yang sebenarnya.
 mapfile -t FILES < <(
 	grep -rl --include='*' -m1 '^#!/bin/sh$' . 2>/dev/null \
 		| grep -v '^\./\.git/' \
+		| grep -v '^\./build/' \
+		| grep -v '^\./\.worktrees/' \
 		| sort
 )
 

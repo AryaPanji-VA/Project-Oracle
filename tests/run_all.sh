@@ -35,6 +35,7 @@ TESTS=(
 	"tests/profile_list_test.sh"   # generator package-list
 	"tests/cli_test.sh"            # CLI dasar
 	"tests/cli_packages_test.sh"   # parser & validasi paket CLI
+	"tests/oracle_cli_modules_test.sh" # status/doctor/lab: POSIX + regresi
 	"tests/containerfile_test.sh"  # statis: Containerfile & mount policy
 	"tests/desktop_config_test.sh"  # statis: XFCE + LightDM source config
 	"tests/lb_config_flow_test.sh" # alur konfigurasi lb (tiruan semantik)
