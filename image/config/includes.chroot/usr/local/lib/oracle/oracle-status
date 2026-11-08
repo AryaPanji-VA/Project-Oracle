@@ -1,0 +1,130 @@
+#!/bin/sh
+# ============================================================================
+# image/config/includes.chroot/usr/local/lib/oracle/oracle-status
+#
+# `oracle status` — satu layar yang menjawab "sistem ini sekarang bagaimana".
+# Dipisahkan dari CLI utama supaya tiap perintah punya berkas sendiri dan
+# tidak ada satu berkas yang terus membesar.
+#
+# PRINSIP: tidak pernah gagal hanya karena satu bagian tidak tersedia.
+# Live ISO bisa boot tanpa NetworkManager, tanpa sensor, tanpa baterai.
+# Bagian yang tidak relevan ditandai, bukan dianggap error.
+# ============================================================================
+
+set -eu
+
+CONF="${ORACLE_CONF:-/etc/oracle/oracle.conf}"
+
+say() { printf '%s\n' "$*"; }
+sec() { printf '\n%s\n' "$*"; printf '%s\n' "--------------------------------------------------------------"; }
+
+# Nilai aman: cetak '-' kalau perintah tidak ada atau gagal.
+kv() {
+	label="$1"; shift
+	val="$("$@" 2>/dev/null | head -1)" || val=""
+	[ -n "$val" ] || val="-"
+	printf '  %-14s %s\n' "$label" "$val"
+}
+
+cmd_status() {
+	# --- Identitas ------------------------------------------------------
+	if [ -f "$CONF" ]; then
+		# shellcheck disable=SC1090
+		. "$CONF"
+		say "${NAME:-ORACLE OS} ${VERSION:-?}  (${DEBIAN_CODENAME:-?})"
+	else
+		say "ORACLE OS (konfigurasi tidak ditemukan)"
+	fi
+
+	# --- Sistem ---------------------------------------------------------
+	sec "SISTEM"
+	printf '  %-14s %s\n' "hostname" "$(cat /etc/hostname 2>/dev/null || echo -)"
+	printf '  %-14s %s\n' "kernel" "$(uname -r 2>/dev/null || echo -)"
+	printf '  %-14s %s\n' "arsitektur" "$(uname -m 2>/dev/null || echo -)"
+	printf '  %-14s %s\n' "uptime" "$(uptime 2>/dev/null | sed 's/.*up //; s/,.*load.*//' || echo -)"
+	printf '  %-14s %s\n' "cpu" "$(nproc 2>/dev/null || echo -) core"
+	printf '  %-14s %s\n' "memori" "$(
+		awk '/MemTotal/{t=$2} /MemAvailable/{a=$2} END{
+			if (t>0) printf "%.1f GiB total, %.1f GiB tersedia", t/1048576, a/1048576
+			else print "-"
+		}' /proc/meminfo 2>/dev/null || echo -
+	)"
+
+	# --- Disk -----------------------------------------------------------
+	# Hanya root filesystem: yang relevan untuk live session.
+	df_out="$(df -h / 2>/dev/null | awk 'NR==2{printf "%s terpakai dari %s (%s)", $3, $2, $5}')"
+	printf '  %-14s %s\n' "disk /" "${df_out:--}"
+
+	# --- Jaringan -------------------------------------------------------
+	sec "JARINGAN"
+	if command -v nmcli >/dev/null 2>&1; then
+		# Cari koneksi aktif pertama. nmcli bisa ada tapi tanpa perangkat.
+		nm="$(nmcli -t -f DEVICE,STATE,CONNECTION device status 2>/dev/null \
+			| grep -v ':unmanaged:' | grep ':connected:' | head -1)"
+		if [ -n "$nm" ]; then
+			dev="$(printf '%s' "$nm" | cut -d: -f1)"
+			conn="$(printf '%s' "$nm" | cut -d: -f3)"
+			addr="$(ip -brief addr show "$dev" 2>/dev/null | awk '{print $3}' | head -1)"
+			printf '  %-14s %s (%s)\n' "antarmuka" "$dev" "$conn"
+			printf '  %-14s %s\n' "alamat" "${addr:--}"
+		else
+			printf '  %-14s %s\n' "antarmuka" "tidak ada koneksi aktif"
+		fi
+	else
+		printf '  %-14s %s\n' "manager" "NetworkManager tidak terpasang"
+	fi
+
+	# Gateway & DNS hanya berguna kalau ada rute.
+	gw="$(ip route show default 2>/dev/null | awk '/default/{print $3; exit}')"
+	printf '  %-14s %s\n' "gateway" "${gw:--}"
+
+	# --- Layanan --------------------------------------------------------
+	sec "LAYANAN"
+	if command -v systemctl >/dev/null 2>&1; then
+		failed="$(systemctl list-units --state=failed --no-legend --no-pager 2>/dev/null | wc -l | tr -d ' ')"
+		printf '  %-14s %s\n' "unit gagal" "${failed:-0}"
+		for u in NetworkManager lightdm; do
+			st="$(systemctl is-active "$u" 2>/dev/null || true)"
+			[ -n "$st" ] || st="-"
+			printf '  %-14s %s\n' "$u" "$st"
+		done
+	else
+		printf '  %-14s %s\n' "systemd" "tidak tersedia"
+	fi
+
+	# --- Profil & lab ---------------------------------------------------
+	sec "ORACLE"
+	pdir="${ORACLE_PROFILE_DIR:-/usr/share/oracle/profiles}"
+	if [ -d "$pdir" ]; then
+		n="$(find "$pdir" -maxdepth 1 -name '*.list' 2>/dev/null | wc -l | tr -d ' ')"
+		printf '  %-14s %s\n' "profil" "$n tersedia (oracle profile list)"
+	else
+		printf '  %-14s %s\n' "profil" "-"
+	fi
+
+	if command -v ip >/dev/null 2>&1 && ip netns list 2>/dev/null | grep -q '^oracle-lab-atk'; then
+		printf '  %-14s %s\n' "lab" "berjalan (oracle lab status)"
+	else
+		printf '  %-14s %s\n' "lab" "tidak berjalan (oracle lab start)"
+	fi
+
+	# --- Versi ----------------------------------------------------------
+	say ""
+	printf '  %-14s %s\n' "versi" "$(printf '%s %s' "${NAME:-ORACLE OS}" "${VERSION:-?}")"
+}
+
+usage() {
+	cat <<'EOF'
+oracle status — ringkasan kondisi sistem
+
+Menampilkan identitas, sistem, jaringan, layanan, dan status ORACLE dalam
+satu layar. Bagian yang tidak tersedia (mis. tanpa baterai atau tanpa
+NetworkManager) ditandai '-', bukan dianggap kesalahan.
+EOF
+}
+
+case "${1:-}" in
+	""|status) cmd_status ;;
+	help|-h|--help) usage ;;
+	*) printf 'oracle status: argumen tidak dikenal: %s\n' "$1" >&2; exit 1 ;;
+esac

@@ -32,6 +32,13 @@ CONF="${ORACLE_CONF:-/etc/oracle/oracle.conf}"
 PROFILE_DIR="${ORACLE_PROFILE_DIR:-/usr/share/oracle/profiles}"
 # Override di atas ada supaya logika bisa diuji di host tanpa menyentuh /etc
 # dan /usr/share. Di dalam image, keduanya memakai nilai default.
+#
+# Modul tambahan (status, doctor, lab) tinggal di LIBDIR. Letaknya dihitung
+# dari lokasi skrip ini sendiri, bukan dipatok absolut: kalau CLI dipindah
+# atau dipanggil lewat symlink, modul tetap ketemu. ORACLE_LIBDIR ada untuk
+# tes di host.
+SELF="$(readlink -f "$0" 2>/dev/null || printf '%s' "$0")"
+LIBDIR="${ORACLE_LIBDIR:-$(dirname "$SELF")/../lib/oracle}"
 
 say()  { printf '%s\n' "$*"; }
 err()  { printf 'oracle: %s\n' "$*" >&2; }
@@ -42,14 +49,26 @@ usage() {
 ORACLE OS — command line interface
 
 Pemakaian:
+  oracle status                ringkasan kondisi sistem (satu layar)
+  oracle doctor                periksa kesehatan sistem + saran perbaikan
   oracle identity              tampilkan identitas sistem
   oracle version               tampilkan versi
+
+  oracle lab start             nyalakan lab keamanan terisolasi
+  oracle lab status            kondisi lab & bukti isolasi
+  oracle lab shell             shell di dalam lab (attacker)
+  oracle lab target            shell di sisi target
+  oracle lab stop              hentikan lab
+
   oracle profile list          daftar profile yang tersedia
   oracle profile check NAME    cek isi profile tanpa memasang
   oracle profile install NAME  pasang paket profile (butuh administrator)
 
 Profile adalah daftar paket untuk satu tujuan, mis. networking atau
 web-security. Profile yang sama dipakai saat build image dan saat runtime.
+
+Lab membuat dua network namespace terisolasi tanpa rute keluar. Butuh
+administrator karena membuat namespace jaringan.
 EOF
 }
 
@@ -214,9 +233,27 @@ cmd_profile_install() {
 
 cmd="$1"; shift
 
+# ---------------------------------------------------------------------------
+# Modul eksternal
+#
+# Dipanggil lewat `exec`, bukan `.` (source): modul punya `set -eu` sendiri
+# dan harus bisa berkembang tanpa membuat namespace variabel CLI kotor.
+# Kalau modul hilang, pesannya harus jelas — bukan "not found" mentah.
+# ---------------------------------------------------------------------------
+run_module() {
+	name="$1"; shift
+	mod="$LIBDIR/$name"
+	if [ ! -f "$mod" ]; then
+		die "modul '$name' tidak ditemukan di $LIBDIR
+  Image ini tidak lengkap. Perintah lain tetap bisa dipakai: oracle help"
+	fi
+	exec sh "$mod" "$@"
+}
+
 case "$cmd" in
 	identity) cmd_identity ;;
 	version)  [ -f "$CONF" ] || die "$CONF tidak ditemukan"; . "$CONF"; say "${NAME} ${VERSION}" ;;
+	status|doctor|lab) run_module "oracle-$cmd" "$@" ;;
 	profile)
 		[ $# -gt 0 ] || die "pakai: oracle profile {list|check|install} [NAME]"
 		sub="$1"; shift

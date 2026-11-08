@@ -1,0 +1,283 @@
+#!/bin/sh
+# ============================================================================
+# image/config/includes.chroot/usr/local/lib/oracle/oracle-doctor
+#
+# `oracle doctor` — pemeriksaan mandiri.
+#
+# BEDA DENGAN `oracle status`:
+#   status  : melaporkan KEADAAN (apa adanya)
+#   doctor  : menilai KESEHATAN dan memberi tindakan perbaikan
+#
+# Setiap temuan punya tingkat:
+#   OK    — sesuai harapan
+#   WAR   — jalan, tapi tidak ideal
+#   GAGAL — tidak memenuhi syarat dasar
+#
+# Exit code: 0 kalau tidak ada GAGAL, 1 kalau ada. Ini supaya bisa dipakai
+# di skrip dan di tes, bukan hanya dibaca manusia.
+# ============================================================================
+
+set -eu
+
+CONF="${ORACLE_CONF:-/etc/oracle/oracle.conf}"
+PROFILE_DIR="${ORACLE_PROFILE_DIR:-/usr/share/oracle/profiles}"
+
+N_OK=0
+N_WARN=0
+N_FAIL=0
+
+ok()   { printf '  [OK]    %s\n' "$*"; N_OK=$((N_OK+1)); }
+warn() { printf '  [WARN]  %s\n' "$*"; N_WARN=$((N_WARN+1)); }
+bad()  { printf '  [GAGAL] %s\n' "$*"; N_FAIL=$((N_FAIL+1)); }
+
+hint() { printf '          -> %s\n' "$*"; }
+
+sec() {
+	printf '\n%s\n' "$*"
+	printf '%s\n' "--------------------------------------------------------------"
+}
+
+cmd_doctor() {
+	say_line="${1:-}"
+	printf 'ORACLE OS — pemeriksaan sistem\n'
+
+	# ---------------------------------------------------------------
+	sec "IDENTITAS"
+	if [ -f "$CONF" ]; then
+		# shellcheck disable=SC1090
+		. "$CONF"
+		ok "konfigurasi ORACLE ditemukan ($CONF)"
+	else
+		bad "konfigurasi ORACLE tidak ditemukan: $CONF"
+		hint "image ini tidak lengkap; pasang ulang dari ISO resmi"
+	fi
+
+	if [ -f /etc/os-release ]; then
+		if grep -qx 'ID=oracle' /etc/os-release 2>/dev/null; then
+			ok "/etc/os-release menandai ID=oracle"
+		else
+			warn "/etc/os-release bukan ID=oracle"
+			hint "identitas sistem mungkin tertimpa paket lain"
+		fi
+	else
+		bad "/etc/os-release tidak ada"
+	fi
+
+	# ---------------------------------------------------------------
+	sec "SISTEM BERKAS"
+	# Root harus bisa ditulis. Yang diperiksa adalah OPSI MOUNT, bukan
+	# `[ -w / ]`: `/` dimiliki root dengan mode 755, sehingga user biasa
+	# selalu mendapat false negative walau filesystem sepenuhnya writable.
+	# Bug ini nyata — `[ -w / ]` melaporkan "read-only" di sistem normal.
+	root_opts="$(awk '$2=="/"{print $4; exit}' /proc/mounts 2>/dev/null)"
+	case ",$root_opts," in
+		*,ro,*) 
+			warn "root filesystem read-only ($root_opts)"
+			hint "wajar untuk beberapa konfigurasi, tapi profil tidak bisa dipasang"
+			;;
+		*)
+			ok "root filesystem dapat ditulis"
+			;;
+	esac
+
+	# Ruang kosong: di bawah 200 MB, pemasangan paket akan gagal.
+	avail_kb="$(df -k / 2>/dev/null | awk 'NR==2{print $4}')"
+	if [ -n "${avail_kb:-}" ]; then
+		avail_mb=$((avail_kb / 1024))
+		if [ "$avail_mb" -lt 200 ]; then
+			bad "ruang kosong di / hanya ${avail_mb} MB"
+			hint "kurang dari 200 MB; pemasangan paket akan gagal"
+		elif [ "$avail_mb" -lt 1024 ]; then
+			warn "ruang kosong di / ${avail_mb} MB"
+			hint "cukup untuk profil kecil, sempit untuk paket besar"
+		else
+			ok "ruang kosong di / ${avail_mb} MB"
+		fi
+	fi
+
+	# ---------------------------------------------------------------
+	sec "REPOSITORI PAKET"
+	# Tanpa sumber APT yang bisa diakses, `oracle profile install` mati.
+	if [ -d /etc/apt/sources.list.d ] || [ -s /etc/apt/sources.list ]; then
+		n_src="$(grep -rhE '^[[:space:]]*deb ' /etc/apt/sources.list /etc/apt/sources.list.d/ 2>/dev/null | wc -l | tr -d ' ')"
+		if [ "${n_src:-0}" -gt 0 ]; then
+			ok "$n_src sumber paket terkonfigurasi"
+		else
+			warn "tidak ada baris 'deb' aktif di sumber APT"
+			hint "profil tidak bisa dipasang sampai repo ditambahkan"
+		fi
+	else
+		warn "direktori sumber APT tidak ditemukan"
+	fi
+
+	# ---------------------------------------------------------------
+	sec "JARINGAN"
+	if command -v nmcli >/dev/null 2>&1; then
+		if systemctl is-active --quiet NetworkManager 2>/dev/null; then
+			ok "NetworkManager berjalan"
+			conn="$(nmcli -t -f DEVICE,STATE device status 2>/dev/null | grep -c ':connected:' || true)"
+			if [ "${conn:-0}" -gt 0 ]; then
+				ok "$conn antarmuka terhubung"
+			else
+				warn "NetworkManager jalan tapi belum ada koneksi"
+				hint "sambungkan kabel atau pilih Wi-Fi dari panel"
+			fi
+		else
+			bad "NetworkManager tidak berjalan"
+			hint "sudo systemctl start NetworkManager"
+		fi
+	else
+		warn "NetworkManager tidak terpasang"
+		hint "jaringan dikelola manual (/etc/network/interfaces)"
+	fi
+
+	# ---------------------------------------------------------------
+	sec "LAYANAN"
+	if command -v systemctl >/dev/null 2>&1; then
+		if systemctl is-system-running 2>/dev/null | grep -qE 'running|degraded'; then
+			state="$(systemctl is-system-running 2>/dev/null || true)"
+			if [ "$state" = "degraded" ]; then
+				warn "systemd: degraded (ada unit gagal)"
+			else
+				ok "systemd: $state"
+			fi
+		fi
+
+		failed_list="$(systemctl list-units --state=failed --no-legend --no-pager 2>/dev/null | awk '{print $1}')"
+		if [ -z "$failed_list" ]; then
+			ok "tidak ada unit gagal"
+		else
+			n="$(printf '%s\n' "$failed_list" | wc -l | tr -d ' ')"
+			warn "$n unit gagal"
+			printf '%s\n' "$failed_list" | head -5 | sed 's/^/          - /'
+			hint "systemctl status <unit> untuk detail"
+		fi
+	else
+		warn "systemd tidak tersedia"
+	fi
+
+	# Polkit: tanpa agent grafis, dialog otentikasi tidak muncul.
+	if command -v pkexec >/dev/null 2>&1; then
+		ok "pkexec tersedia"
+		agent="$(pgrep -c -f 'polkit-.*authentication-agent' 2>/dev/null || echo 0)"
+		if [ "${agent:-0}" -ge 1 ]; then
+			ok "agent polkit berjalan ($agent proses)"
+			if [ "$agent" -gt 1 ]; then
+				warn "$agent agent polkit berjalan — dialog ganda mungkin muncul"
+				hint "seharusnya hanya satu agent"
+			fi
+		else
+			warn "agent polkit grafis tidak berjalan"
+			hint "dialog otentikasi tidak akan muncul; pasang mate-polkit"
+		fi
+	else
+		warn "pkexec tidak ada; otentikasi grafis tidak tersedia"
+	fi
+
+	# ---------------------------------------------------------------
+	sec "DESKTOP"
+	if command -v xfce4-session >/dev/null 2>&1; then
+		if pgrep -x xfce4-session >/dev/null 2>&1; then
+			ok "sesi XFCE berjalan"
+		else
+			warn "sesi XFCE tidak terdeteksi (shell teks?)"
+		fi
+	else
+		warn "XFCE tidak terpasang"
+	fi
+
+	# Tema & ikon: tanpa ini image tampil seperti Debian, bukan ORACLE.
+	for t in /usr/share/themes/ORACLE /usr/share/icons/ORACLE-Papirus; do
+		if [ -d "$t" ]; then
+			ok "aset tema: $(basename "$t")"
+		else
+			warn "aset tema hilang: $t"
+			hint "identitas visual akan jatuh ke default"
+		fi
+	done
+
+	# ---------------------------------------------------------------
+	sec "AUDIO"
+	if command -v pactl >/dev/null 2>&1; then
+		if pactl info >/dev/null 2>&1; then
+			ok "server suara merespons"
+		else
+			warn "pactl ada tapi server suara tidak merespons"
+			hint "pipewire/pipewire-pulse mungkin belum jalan"
+		fi
+	else
+		warn "pactl tidak ada (pulseaudio-utils belum terpasang)"
+	fi
+
+	# ---------------------------------------------------------------
+	sec "ORACLE"
+	if [ -d "$PROFILE_DIR" ]; then
+		n="$(find "$PROFILE_DIR" -maxdepth 1 -name '*.list' 2>/dev/null | wc -l | tr -d ' ')"
+		if [ "${n:-0}" -gt 0 ]; then
+			ok "$n profil tersedia"
+		else
+			warn "tidak ada profil di $PROFILE_DIR"
+		fi
+	else
+		bad "direktori profil tidak ada: $PROFILE_DIR"
+	fi
+
+	# Alat lab: tanpa iproute2, `oracle lab` tidak bisa jalan.
+	if command -v ip >/dev/null 2>&1; then
+		ok "iproute2 tersedia (lab dapat dijalankan)"
+	else
+		warn "iproute2 tidak ada; oracle lab tidak bisa dijalankan"
+		hint "sudo apt-get install iproute2"
+	fi
+
+	# Alat serang bersifat opt-in lewat profil, jadi ISO dasar memang tidak
+	# membawanya. Dilaporkan sebagai WARN, bukan GAGAL: lab tetap bisa
+	# dinyalakan, tapi belum ada alat untuk menguji target di dalamnya.
+	if command -v ip >/dev/null 2>&1; then
+		missing=""
+		for t in nmap nc tcpdump; do
+			command -v "$t" >/dev/null 2>&1 || missing="$missing $t"
+		done
+		if [ -z "$missing" ]; then
+			ok "alat uji lab tersedia (nmap, nc, tcpdump)"
+		else
+			warn "alat uji lab belum terpasang:$missing"
+			hint "pasang profil: sudo oracle profile install networking"
+		fi
+	fi
+
+	# ---------------------------------------------------------------
+	printf '\n%s\n' "=============================================================="
+	printf ' Ringkasan: %d OK, %d peringatan, %d gagal\n' "$N_OK" "$N_WARN" "$N_FAIL"
+	printf '%s\n' "=============================================================="
+
+	if [ "$N_FAIL" -gt 0 ]; then
+		printf ' Ada masalah yang perlu diperbaiki.\n'
+		return 1
+	elif [ "$N_WARN" -gt 0 ]; then
+		printf ' Sistem berjalan; peringatan di atas tidak menghalangi.\n'
+		return 0
+	else
+		printf ' Tidak ada masalah yang ditemukan.\n'
+		return 0
+	fi
+}
+
+usage() {
+	cat <<'EOF'
+oracle doctor — pemeriksaan mandiri
+
+Memeriksa identitas, filesystem, repositori, jaringan, layanan, desktop,
+audio, dan komponen ORACLE. Setiap temuan diberi tingkat OK / WARN / GAGAL
+beserta saran perbaikan.
+
+Exit code 0 bila tidak ada GAGAL, 1 bila ada — sehingga bisa dipakai di
+skrip:  sudo oracle doctor || echo "perlu perbaikan"
+EOF
+}
+
+case "${1:-}" in
+	""|check) cmd_doctor ;;
+	help|-h|--help) usage ;;
+	*) printf 'oracle doctor: argumen tidak dikenal: %s\n' "$1" >&2; exit 1 ;;
+esac

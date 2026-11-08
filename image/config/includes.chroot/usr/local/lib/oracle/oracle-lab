@@ -1,0 +1,395 @@
+#!/bin/sh
+# ============================================================================
+# image/config/includes.chroot/usr/local/lib/oracle/oracle-lab — lab terisolasi
+#
+# Dipanggil oleh `oracle lab ...`. Butuh root, karena membuat network namespace.
+#
+# ---------------------------------------------------------------------------
+# KENAPA NETWORK NAMESPACE, BUKAN CONTAINER
+# ---------------------------------------------------------------------------
+# Lab harus bisa menjalankan alat apa pun tanpa memasang image OCI, tanpa
+# daemon, dan tanpa menulis ke disk. `ip netns` memenuhi itu: isolasi jaringan
+# tingkat kernel, tanpa runtime tambahan.
+#
+# ---------------------------------------------------------------------------
+# TEMUAN YANG MEMBENTUK DESAIN INI (diuji di Debian 13, bukan diasumsikan)
+# ---------------------------------------------------------------------------
+# 1. Network namespace SAJA TIDAK CUKUP untuk menutup DNS.
+#    systemd-resolved mengekspos socket Unix world-writable
+#    /run/systemd/resolve/io.systemd.Resolve. Socket Unix tidak terikat
+#    namespace jaringan, jadi nama domain tetap resolve walau tidak ada rute.
+#    Terbukti: ping ke 1.1.1.1 gagal, tapi `getent hosts deb.debian.org`
+#    berhasil. Perbaikannya: timpa direktori socket itu dengan tmpfs
+#    (mount namespace) dan kosongkan /etc/resolv.conf.
+#
+# 2. `ip netns exec` membuat MOUNT NAMESPACE BARU pada setiap pemanggilan.
+#    Jadi menutup socket di satu panggilan tidak bertahan ke panggilan
+#    berikutnya. Karena itu penutup DNS dipasang di dalam panggilan yang
+#    SAMA dengan shell pengguna (`ip netns exec X sh -c '...'`), bukan
+#    lewat `unshare`.
+#
+#    `unshare --net=FILE` TERBUKTI MERUSAK. Di util-linux sintaks itu
+#    berarti "buat netns baru lalu bind-mount ke FILE" — bukan "bergabung
+#    ke FILE". Setelah dipanggil, namespace hanya berisi `lo DOWN` dan lab
+#    tidak bisa dipakai lagi. Jangan pernah memakainya untuk masuk namespace.
+#
+# 3. Rootless (`unshare -rn`) TIDAK dipakai. Diuji: DNS tetap bocor dan
+#    /run maupun /etc/resolv.conf tidak bisa ditimpa tanpa root. Lab yang
+#    mengaku terisolasi tapi membocorkan DNS lebih buruk daripada tidak ada lab.
+#
+# 4. Verifikasi isolasi TIDAK memakai /dev/tcp. Itu fitur bash; di Debian
+#    /bin/sh adalah dash, sehingga perintah itu SELALU gagal dan kegagalannya
+#    terbaca palsu sebagai "terisolasi". Semua uji konektivitas di sini
+#    memakai `ip route` (struktural) dan `ping` (bila tersedia).
+# ============================================================================
+
+set -eu
+
+STATE_DIR="${ORACLE_LAB_STATE:-/run/oracle-lab}"
+STATE_FILE="$STATE_DIR/state"
+NS_A="oracle-lab-atk"
+NS_T="oracle-lab-tgt"
+VETH_A="vlab-atk"
+VETH_T="vlab-tgt"
+NET_DEFAULT="10.66.0"
+
+say() { printf '%s\n' "$*"; }
+err() { printf 'oracle lab: %s\n' "$*" >&2; }
+die() { err "$*"; exit 1; }
+
+need_root() {
+	[ "$(id -u)" -eq 0 ] || die "lab butuh administrator (membuat network namespace).
+  Jalankan: sudo oracle lab $*"
+}
+
+need_ip() {
+	command -v ip >/dev/null 2>&1 || die "perintah 'ip' tidak ada.
+  Pasang: sudo apt-get install iproute2"
+}
+
+# IP di dalam lab. Attacker .1, target .2 pada subnet yang sama.
+lab_ip_a() { printf '%s.1' "$NET"; }
+lab_ip_t() { printf '%s.2' "$NET"; }
+
+is_running() {
+	[ -f "$STATE_FILE" ] || return 1
+	# `ip netns list` mencetak "oracle-lab-atk (id: 4)", bukan namanya saja.
+	# Versi awal memakai `grep -qx` (cocok PERSIS) sehingga tidak pernah
+	# cocok dan `status` selalu melaporkan "tidak berjalan" padahal lab hidup.
+	ip netns list 2>/dev/null | grep -q "^$NS_A" || return 1
+	ip netns list 2>/dev/null | grep -q "^$NS_T" || return 1
+
+	# Namespace bisa ADA tapi sudah kosong (mis. dirusak `unshare --net=FILE`).
+	# Tanpa cek ini, `status` melaporkan lab sehat padahal tidak ada antarmuka
+	# sama sekali. Antarmuka veth wajib ada di kedua sisi.
+	ip netns exec "$NS_A" ip link show "$VETH_A" >/dev/null 2>&1 || return 1
+	ip netns exec "$NS_T" ip link show "$VETH_T" >/dev/null 2>&1 || return 1
+	return 0
+}
+
+# ---------------------------------------------------------------------------
+# start
+# ---------------------------------------------------------------------------
+do_start() {
+	NET="$NET_DEFAULT"
+	for arg in "$@"; do
+		case "$arg" in
+			--subnet=*) NET="${arg#--subnet=}" ;;
+			*) die "argumen tidak dikenal: $arg" ;;
+		esac
+	done
+
+	# Subnet divalidasi ketat: hanya tiga oktet angka, tidak boleh apa pun
+	# yang bisa menjadi argumen asing bagi `ip`. Input tidak pernah masuk eval.
+	case "$NET" in
+		[0-9]*.[0-9]*.[0-9]*) ;;
+		*) die "subnet tidak valid: '$NET' (contoh: 10.66.0)" ;;
+	esac
+	printf '%s' "$NET" | grep -Eq '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$' \
+		|| die "subnet tidak valid: '$NET' (contoh: 10.66.0)"
+
+	if is_running; then
+		die "lab sudah berjalan. Lihat: oracle lab status
+  Hentikan dulu: sudo oracle lab stop"
+	fi
+
+	# Sisa state lama (mis. reboot sebagian) dibersihkan supaya `start`
+	# tidak gagal dengan pesan "File exists" yang membingungkan.
+	_cleanup_quiet
+
+	say "Menyiapkan lab terisolasi..."
+	ip netns add "$NS_A" || die "gagal membuat namespace attacker"
+	ip netns add "$NS_T" || die "gagal membuat namespace target"
+
+	# veth pair: satu ujung di attacker, satu di target. TIDAK ada ujung
+	# di host, sehingga host tidak punya antarmuka menuju lab. Inilah yang
+	# membuat isolasi berlaku dua arah, bukan hanya keluar.
+	if ! ip link add "$VETH_A" type veth peer name "$VETH_T"; then
+		_cleanup_quiet
+		die "gagal membuat veth pair"
+	fi
+	ip link set "$VETH_A" netns "$NS_A"
+	ip link set "$VETH_T" netns "$NS_T"
+
+	ip -n "$NS_A" addr add "$(lab_ip_a)/24" dev "$VETH_A"
+	ip -n "$NS_T" addr add "$(lab_ip_t)/24" dev "$VETH_T"
+
+	ip -n "$NS_A" link set lo up
+	ip -n "$NS_T" link set lo up
+	ip -n "$NS_A" link set "$VETH_A" up
+	ip -n "$NS_T" link set "$VETH_T" up
+
+	# Sengaja TIDAK ada default route dan TIDAK ada NAT. Ini yang membuat
+	# kedua namespace tidak punya jalan keluar.
+	# State dir HARUS dibuat lebih dulu. Versi sebelumnya menulis state.tmp
+	# lalu baru membuat direktori sebagai cadangan; di POSIX sh redirection
+	# yang gagal tidak selalu memicu cabang `||`, sehingga `start` berhenti
+	# dengan "Directory nonexistent" padahal namespace sudah terlanjur dibuat.
+	mkdir -p "$STATE_DIR" || die "gagal membuat direktori state: $STATE_DIR"
+	{
+		printf 'NET=%s\n' "$NET"
+		printf 'STARTED=%s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+	} > "$STATE_FILE.tmp" || die "gagal menulis state lab"
+	mv "$STATE_FILE.tmp" "$STATE_FILE"
+
+	say ""
+	say "Lab siap."
+	say "  attacker : $(lab_ip_a)/24   (namespace $NS_A)"
+	say "  target   : $(lab_ip_t)/24   (namespace $NS_T)"
+	say "  keluar   : tidak ada rute (terisolasi)"
+	say ""
+	_verify
+	_tools
+	say ""
+	say "Masuk:  sudo oracle lab shell      (attacker)"
+	say "        sudo oracle lab target     (target)"
+	say "Hentikan: sudo oracle lab stop"
+}
+
+_cleanup_quiet() {
+	# Urutan penting: veth dihapus lebih dulu. Kalau namespace sudah mati,
+	# veth-nya mungkin masih ada di host dan menghalangi pembuatan ulang.
+	ip link del "$VETH_A" 2>/dev/null || true
+	ip link del "$VETH_T" 2>/dev/null || true
+	ip netns del "$NS_A" 2>/dev/null || true
+	ip netns del "$NS_T" 2>/dev/null || true
+
+	# `ip netns del` TIDAK menghapus file bila namespace sudah mati (mis.
+	# dirusak `unshare --net=FILE`). File yatim itu membuat `ip netns add`
+	# berikutnya gagal dengan "File exists" — dan karena start selalu
+	# membersihkan dulu, lab jadi buntu permanen.
+	#
+	# Mount bisa BERTUMPUK (findmnt mencetak target yang sama lebih dari
+	# sekali), dan satu `umount` hanya melepas satu lapis; sisanya membuat
+	# `rm` gagal dengan EBUSY. Karena itu dilepas berulang sampai bersih.
+	for _ns in "$NS_A" "$NS_T"; do
+		_f="/var/run/netns/$_ns"
+		[ -e "$_f" ] || continue
+		# Hanya file yatim: namespace kosong pun masih bisa dimasuki, jadi
+		# keberhasilan `ip netns exec` bukan penanda namespace sehat.
+		_n=0
+		while mountpoint -q "$_f" 2>/dev/null && [ "$_n" -lt 10 ]; do
+			umount "$_f" 2>/dev/null || break
+			_n=$((_n + 1))
+		done
+		rm -f "$_f" 2>/dev/null || true
+	done
+
+	rm -f "$STATE_FILE" "$STATE_FILE.tmp" 2>/dev/null || true
+}
+
+# ---------------------------------------------------------------------------
+# verifikasi isolasi
+#
+# Diperiksa secara STRUKTURAL (tabel rute), bukan hanya dengan mencoba
+# koneksi. Tabel rute kosong berarti tidak ada jalan keluar secara definisi,
+# terlepas dari ada atau tidaknya `ping`.
+# ---------------------------------------------------------------------------
+_verify() {
+	fail=0
+
+	for pair in "$NS_A:attacker" "$NS_T:target"; do
+		ns="${pair%%:*}"
+		label="${pair#*:}"
+		route="$(ip netns exec "$ns" ip route show default 2>/dev/null || true)"
+		if [ -z "$route" ]; then
+			say "  [OK]   $label tidak punya default route"
+		else
+			say "  [GAGAL] $label punya default route: $route"
+			fail=1
+		fi
+	done
+
+	# Host tidak boleh bisa menjangkau lab. Dicek lewat RUTE SPESIFIK ke
+	# subnet lab, bukan `ip route get`: perintah itu selalu berhasil karena
+	# ada default route, sehingga versi awal selalu melaporkan "bocor"
+	# meski host sama sekali tidak punya jalan ke lab.
+	if ip route show "$NET.0/24" 2>/dev/null | grep -q .; then
+		say "  [GAGAL] host punya rute ke $NET.0/24 — isolasi bocor"
+		fail=1
+	else
+		say "  [OK]   host tidak punya rute ke $NET.0/24"
+	fi
+
+	# Attacker harus bisa menjangkau target (kalau tidak, lab tidak berguna).
+	if command -v ping >/dev/null 2>&1; then
+		if ip netns exec "$NS_A" ping -c1 -W2 -q "$(lab_ip_t)" >/dev/null 2>&1; then
+			say "  [OK]   attacker menjangkau target"
+		else
+			say "  [GAGAL] attacker tidak menjangkau target"
+			fail=1
+		fi
+		# Dan tidak boleh bisa keluar.
+		if ip netns exec "$NS_A" ping -c1 -W2 -q 1.1.1.1 >/dev/null 2>&1; then
+			say "  [GAGAL] attacker bisa keluar ke internet"
+			fail=1
+		else
+			say "  [OK]   attacker tidak bisa keluar ke internet"
+		fi
+	else
+		say "  [info] ping tidak terpasang; isolasi diperiksa dari tabel rute"
+	fi
+
+	[ "$fail" -eq 0 ]
+}
+
+# ---------------------------------------------------------------------------
+# status
+# ---------------------------------------------------------------------------
+do_status() {
+	# Root diperlukan: `is_running` menjalankan `ip netns exec` untuk
+	# memeriksa antarmuka di dalam namespace, dan itu butuh CAP_SYS_ADMIN.
+	need_root "status"
+	need_ip
+	# NET harus selalu terdefinisi sebelum _verify dipanggil. `set -u`
+	# membuat referensi ke variabel kosong jadi error keras, dan _verify
+	# dipakai juga oleh `start` di mana NET datang dari argumen.
+	NET="$NET_DEFAULT"
+	if ! is_running; then
+		say "Lab tidak berjalan."
+		say "Mulai: sudo oracle lab start"
+		return 0
+	fi
+
+	# shellcheck disable=SC1090
+	NET="$(sed -n 's/^NET=//p' "$STATE_FILE" 2>/dev/null)"
+	started="$(sed -n 's/^STARTED=//p' "$STATE_FILE" 2>/dev/null)"
+	[ -n "$NET" ] || NET="$NET_DEFAULT"
+
+	say "Lab ORACLE — berjalan"
+	say ""
+	say "  mulai    : ${started:-?}"
+	say "  subnet   : $NET.0/24"
+	say ""
+	say "  attacker ($NS_A):"
+	ip -n "$NS_A" -brief addr 2>/dev/null | sed 's/^/    /'
+	say "  target ($NS_T):"
+	ip -n "$NS_T" -brief addr 2>/dev/null | sed 's/^/    /'
+	say ""
+	say "Verifikasi isolasi:"
+	_verify || true
+	_tools
+}
+
+# Alat tempur diperiksa saat `start` dan `status`: pengguna harus tahu kalau
+# alatnya tidak ada SEBELUM masuk ke lab dan bingung kenapa tidak bisa apa-apa.
+# Lab tetap terisolasi tanpa alat ini; yang hilang hanya kemampuannya untuk
+# diuji, jadi ini peringatan, bukan kegagalan.
+_tools() {
+	_missing=""
+	for t in nmap nc curl tcpdump; do
+		command -v "$t" >/dev/null 2>&1 || _missing="$_missing $t"
+	done
+	[ -n "$_missing" ] || return 0
+
+	say ""
+	say "Alat lab belum lengkap:$([ -n "$_missing" ] && printf '%s' "$_missing")"
+	say "Lab tetap terisolasi, tetapi tidak ada alat untuk mengujinya."
+	say "Pasang: sudo oracle profile install networking"
+}
+
+# ---------------------------------------------------------------------------
+# shell / target
+#
+# Dijalankan lewat `ip netns exec` + mount penutup DNS dalam SATU invocation,
+# supaya mount namespace dan network namespace aktif bersamaan — syarat agar
+# penutupan jalur DNS benar-benar berlaku untuk shell yang dibuka.
+# ---------------------------------------------------------------------------
+_enter() {
+	ns="$1"
+	label="$2"
+	need_root "$label"
+	need_ip
+	is_running || die "lab tidak berjalan. Mulai: sudo oracle lab start"
+
+	say "Masuk ke $label ($ns). Keluar dengan 'exit'."
+	say "Jaringan: terisolasi, tanpa rute keluar."
+	say ""
+
+	# Penutup DNS dipasang di dalam mount namespace milik panggilan ini,
+	# lalu shell dijalankan di panggilan yang SAMA. Dua alasan:
+	#
+	#  a) Dijalankan di sini, bukan di `start`, supaya tidak mengubah
+	#     sistem: mount hilang begitu shell keluar (terbukti — panggilan
+	#     berikutnya melihat /run/systemd/resolve normal lagi).
+	#  b) Harus satu panggilan dengan shell-nya, karena `ip netns exec`
+	#     membuat mount namespace baru setiap kali dipanggil.
+	#
+	# JANGAN pakai `unshare --net=FILE`. Di util-linux sintaks itu berarti
+	# "buat netns baru lalu bind-mount ke FILE" — ia MENGGANTI isi lab
+	# dengan namespace kosong. Terbukti: setelah dipanggil, namespace
+	# hanya berisi `lo DOWN` dan lab tidak bisa dipakai lagi.
+	exec ip netns exec "$ns" sh -c '
+		mount -t tmpfs none /run/systemd/resolve 2>/dev/null || true
+		mount --bind /dev/null /etc/resolv.conf 2>/dev/null || true
+		exec "${SHELL:-/bin/sh}"
+	'
+}
+
+do_stop() {
+	need_root "stop"
+	need_ip
+	if ! is_running; then
+		_cleanup_quiet
+		say "Lab tidak berjalan; tidak ada yang dihentikan."
+		return 0
+	fi
+	_cleanup_quiet
+	say "Lab dihentikan. Namespace dan antarmuka sudah dihapus."
+}
+
+usage() {
+	cat <<'EOF'
+oracle lab — lab keamanan terisolasi
+
+Pemakaian:
+  sudo oracle lab start [--subnet=A.B.C]   nyalakan lab
+  sudo oracle lab status                   tampilkan kondisi & isolasi (butuh root)
+  sudo oracle lab shell                    shell di attacker
+  sudo oracle lab target                   shell di target
+  sudo oracle lab stop                     hentikan & bersihkan
+
+Lab membuat dua network namespace yang terhubung satu sama lain tetapi
+TIDAK punya rute keluar. Host juga tidak punya rute menuju lab, jadi
+isolasi berlaku dua arah.
+
+Jalur DNS lewat systemd-resolved ikut ditutup, karena network namespace
+saja tidak memblokir socket Unix.
+EOF
+}
+
+# ---------------------------------------------------------------------------
+# Dispatch
+# ---------------------------------------------------------------------------
+[ $# -gt 0 ] || { usage; exit 1; }
+cmd="$1"; shift
+
+case "$cmd" in
+	start)  need_root "start"; need_ip; do_start "$@" ;;
+	status) do_status ;;
+	shell)  _enter "$NS_A" "attacker" ;;
+	target) _enter "$NS_T" "target" ;;
+	stop)   do_stop ;;
+	help|-h|--help) usage ;;
+	*) die "subperintah tidak dikenal: $cmd (start|status|shell|target|stop)" ;;
+esac
