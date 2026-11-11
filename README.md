@@ -1,5 +1,15 @@
 # ORACLE OS
 
+> ## ⏸ ON HOLD
+>
+> Proyek ini **dihentikan sementara sejak 11 November 2026** karena pemiliknya
+> fokus pada project kampus. Tidak ada commit baru sampai ada keputusan untuk
+> melanjutkan.
+>
+> Ini bukan proyek gagal atau abandoned. State saat dihentikan terdokumentasi
+> di [`docs/ON-HOLD.md`](docs/ON-HOLD.md) — apa yang sudah bekerja, apa yang
+> belum, dan cara melanjutkan tanpa mengulang pekerjaan yang sudah selesai.
+
 **ORACLE OS** adalah proyek eksperimental untuk membangun distribusi Linux sendiri sebagai lab pembelajaran sistem operasi dan cybersecurity.
 
 ## Visi
@@ -67,6 +77,11 @@ ORACLE dimulai sebagai distribusi Linux berbasis kernel yang sudah ada. Pengemba
 
 ## Status
 
-`Early Development`
+`On Hold` — dihentikan sementara 11 November 2026 (project kampus).
 
-Proyek ini masih dalam tahap awal pembelajaran dan eksperimen.
+Fase terakhir yang dikerjakan: **Phase 4 (ORACLE Tooling)** dan **Phase 5
+(Reliability & Release)** selesai, keduanya terverifikasi pada ISO yang
+di-boot sungguhan (22/22 dan 40/40). ISO terakhir tersimpan di luar repo
+dengan checksum.
+
+Untuk melanjutkan: baca [`docs/ON-HOLD.md`](docs/ON-HOLD.md).
