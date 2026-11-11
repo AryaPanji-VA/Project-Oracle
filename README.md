@@ -2,7 +2,7 @@
 
 > ## ⏸ ON HOLD
 >
-> Proyek ini **dihentikan sementara sejak 11 November 2026** karena pemiliknya
+> Proyek ini **dihentikan sementara sejak 11 November 2026** karena saya sedang
 > fokus pada project kampus. Tidak ada commit baru sampai ada keputusan untuk
 > melanjutkan.
 >
